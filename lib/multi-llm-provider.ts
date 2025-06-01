@@ -120,11 +120,13 @@ export class MultiLLMProvider {
       userId?: string
     } = {},
   ): Promise<LLMResponse | LLMError> {
+    console.log("🤖 Starting LLM request with options:", options)
+
     await this.detectAvailableProviders()
 
     if (this.availableProviders.length === 0) {
       return {
-        error: "No LLM providers configured. Please add an API key in settings.",
+        error: "No LLM providers configured. Please add an API key in Settings → Profile → API Keys.",
         provider: "none",
       }
     }
@@ -140,10 +142,11 @@ export class MultiLLMProvider {
     }
 
     try {
+      console.log(`🔑 Getting API key for provider: ${providerId}`)
       const apiKey = await getDecryptedApiKey(providerId, options.userId)
       if (!apiKey) {
         return {
-          error: `API key not found for ${provider.name}`,
+          error: `API key not found for ${provider.name}. Please add one in Settings → Profile → API Keys.`,
           provider: providerId,
         }
       }
@@ -155,6 +158,8 @@ export class MultiLLMProvider {
 
       const temperature = options.temperature ?? 0.7
       const maxTokens = options.maxTokens || provider.maxTokens
+
+      console.log(`🚀 Calling ${provider.name} with model: ${model}`)
 
       switch (providerId) {
         case "openai":
@@ -186,7 +191,7 @@ export class MultiLLMProvider {
           }
       }
     } catch (error) {
-      console.error(`Error calling ${provider.name}:`, error)
+      console.error(`❌ Error calling ${provider.name}:`, error)
       return {
         error: error instanceof Error ? error.message : "Unknown error occurred",
         provider: providerId,
@@ -200,41 +205,54 @@ export class MultiLLMProvider {
     messages: LLMMessage[],
     options: { model: string; temperature: number; maxTokens: number },
   ): Promise<LLMResponse | LLMError> {
-    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: options.model,
-        messages,
-        temperature: options.temperature,
-        max_tokens: options.maxTokens,
-      }),
-    })
+    console.log(`📡 Making request to ${provider.name} API...`)
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      return {
-        error: `${provider.name} API error: ${response.status} - ${errorData.error?.message || "Unknown error"}`,
-        provider: provider.id,
-        statusCode: response.status,
+    try {
+      const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: options.model,
+          messages,
+          temperature: options.temperature,
+          max_tokens: options.maxTokens,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error(`❌ ${provider.name} API error:`, response.status, errorData)
+        return {
+          error: `${provider.name} API error: ${response.status} - ${errorData.error?.message || "Unknown error"}`,
+          provider: provider.id,
+          statusCode: response.status,
+        }
       }
-    }
 
-    const data = await response.json()
-    return {
-      content: data.choices[0]?.message?.content || "",
-      usage: data.usage
-        ? {
-            promptTokens: data.usage.prompt_tokens,
-            completionTokens: data.usage.completion_tokens,
-            totalTokens: data.usage.total_tokens,
-          }
-        : undefined,
-      model: data.model,
-      finishReason: data.choices[0]?.finish_reason,
+      const data = await response.json()
+      console.log(`✅ ${provider.name} response received successfully`)
+
+      return {
+        content: data.choices[0]?.message?.content || "",
+        usage: data.usage
+          ? {
+              promptTokens: data.usage.prompt_tokens,
+              completionTokens: data.usage.completion_tokens,
+              totalTokens: data.usage.total_tokens,
+            }
+          : undefined,
+        model: data.model,
+        finishReason: data.choices[0]?.finish_reason,
+      }
+    } catch (error) {
+      console.error(`❌ Network error calling ${provider.name}:`, error)
+      return {
+        error: `Network error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        provider: provider.id,
+      }
     }
   }
 
