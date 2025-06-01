@@ -4,6 +4,7 @@ import { getSupabaseFromServer, getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDefaultUserId } from "@/lib/default-user"
 import { agentExecutionEngine } from "@/lib/agent-execution-engine"
+import { LLMService } from "@/lib/llm-service"
 
 export interface ExecutionResult {
   success: boolean
@@ -29,6 +30,23 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
         error: "Authentication required",
       }
     }
+
+    // Check if user has LLM providers configured
+    const availableProviders = await LLMService.getAvailableProviders(userId)
+
+    if (availableProviders.length === 0) {
+      return {
+        success: false,
+        error: "No LLM providers configured. Please add API keys in Settings → Profile to enable AI execution.",
+        logs: [
+          "❌ No LLM providers found",
+          "🔑 Please add API keys in Settings",
+          "💡 Supported: OpenAI, Anthropic, Groq, xAI",
+        ],
+      }
+    }
+
+    console.log(`🔑 User has configured providers: ${availableProviders.join(", ")}`)
 
     // Get agent details
     console.log(`🔍 Looking for agent: ${agentId}`)
@@ -118,8 +136,8 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
       console.log("✅ Created initial tasks")
     }
 
-    // Start the real AI execution
-    console.log("🚀 Starting AI execution engine")
+    // Start the real AI execution using user's LLM providers
+    console.log("🚀 Starting AI execution engine with user's LLM providers")
     const executionResult = await agentExecutionEngine.startAgentExecution(agentId)
 
     if (!executionResult.success) {
@@ -134,10 +152,11 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
       agent_id: agentId,
       user_id: userId,
       log_type: "milestone",
-      message: "🚀 Agent execution started with AI engine",
+      message: `🚀 Agent execution started using your ${availableProviders.join(", ")} provider(s)`,
       metadata: {
         execution_type: "ai_powered",
-        has_openai_key: !!process.env.OPENAI_API_KEY,
+        available_providers: availableProviders,
+        providers_count: availableProviders.length,
       },
       created_at: new Date().toISOString(),
     })
@@ -147,11 +166,12 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
 
     return {
       success: true,
-      message: "Agent execution started successfully with AI engine",
+      message: `Agent execution started successfully using your ${availableProviders.join(", ")} provider(s)`,
       logs: [
         "🚀 Agent execution started",
+        `🔑 Using your ${availableProviders.join(", ")} provider(s)`,
         "🧠 AI engine initialized",
-        "📋 Processing tasks with LLM",
+        "📋 Processing tasks with your LLM",
         "⚡ Real-time execution in progress",
       ],
     }

@@ -54,7 +54,7 @@ export class AgentExecutionEngine {
   }
 
   /**
-   * Execute agent's current task using real LLM
+   * Execute agent's current task using user's LLM providers
    */
   async executeAgentTask(context: AgentExecutionContext): Promise<ExecutionResult> {
     const startTime = Date.now()
@@ -66,8 +66,12 @@ export class AgentExecutionEngine {
       await this.logAgentActivity(
         context.agentId,
         "action",
-        `🧠 Starting intelligent task execution for: ${context.agentGoal}`,
-        { execution_started: true, context_summary: this.summarizeContext(context) },
+        `🧠 Starting intelligent task execution using your LLM providers`,
+        {
+          execution_started: true,
+          context_summary: this.summarizeContext(context),
+          user_id: context.userId,
+        },
       )
 
       // Get next task to work on
@@ -80,8 +84,8 @@ export class AgentExecutionEngine {
         }
       }
 
-      // Execute task with LLM
-      const executionResult = await this.executeTaskWithLLM(context, currentTask)
+      // Execute task with user's LLM
+      const executionResult = await this.executeTaskWithUserLLM(context, currentTask)
 
       // Process results and update database
       await this.processExecutionResults(context, currentTask, executionResult)
@@ -114,9 +118,9 @@ export class AgentExecutionEngine {
   }
 
   /**
-   * Execute a specific task using LLM
+   * Execute a specific task using user's configured LLM
    */
-  private async executeTaskWithLLM(context: AgentExecutionContext, task: any): Promise<ExecutionResult> {
+  private async executeTaskWithUserLLM(context: AgentExecutionContext, task: any): Promise<ExecutionResult> {
     const prompt = this.buildExecutionPrompt(context, task)
 
     try {
@@ -124,14 +128,41 @@ export class AgentExecutionEngine {
       await this.logAgentActivity(context.agentId, "progress", `📋 Working on: ${task.title}`, {
         task_id: task.id,
         task_title: task.title,
+        using_user_llm: true,
       })
 
-      // Generate response using LLM
+      // Check if user has any LLM providers configured
+      const availableProviders = await LLMService.getAvailableProviders(context.userId)
+
+      if (availableProviders.length === 0) {
+        await this.logAgentActivity(
+          context.agentId,
+          "warning",
+          "⚠️ No LLM providers configured. Please add API keys in Settings.",
+          { available_providers: 0 },
+        )
+
+        return {
+          success: true,
+          nextAction: "wait_for_dependency",
+          dependencies: [
+            {
+              title: "Configure LLM Provider",
+              reason:
+                "No API keys found. Please add OpenAI, Anthropic, Groq, or xAI API keys in Settings to enable AI execution.",
+              priority: "high" as const,
+            },
+          ],
+        }
+      }
+
+      console.log(`🔑 Using user's LLM providers: ${availableProviders.join(", ")}`)
+
+      // Generate response using user's LLM
       const response = await LLMService.generateJSON({
         prompt,
+        systemPrompt: `You are an intelligent AI agent working on behalf of the user. Be helpful, thorough, and create actionable next steps.`,
         userId: context.userId,
-        maxTokens: 2000,
-        temperature: 0.3,
       })
 
       if (!response.success) {
@@ -146,6 +177,7 @@ export class AgentExecutionEngine {
         task_id: task.id,
         result_summary: result.result?.substring(0, 100),
         tokens_used: response.tokensUsed,
+        providers_available: availableProviders.length,
       })
 
       return {
@@ -163,7 +195,7 @@ export class AgentExecutionEngine {
         dependencies: [
           {
             title: `Review and resolve: ${task.title}`,
-            reason: `AI execution encountered an issue: ${error instanceof Error ? error.message : "Unknown error"}. Human review needed.`,
+            reason: `AI execution encountered an issue: ${error instanceof Error ? error.message : "Unknown error"}. Please check your API keys in Settings or review this task manually.`,
             priority: "high" as const,
           },
         ],
@@ -178,16 +210,18 @@ export class AgentExecutionEngine {
     return `You are an AI agent named "${context.agentName}" with the goal: "${context.agentGoal}"
 
 Current Task: ${task.title}
-Task Description: ${task.description}
-Task Priority: ${task.priority}
+Task Description: ${task.description || "No description provided"}
+Task Priority: ${task.priority || "medium"}
 
 Context:
 - Agent Type: ${context.agentType}
-- Completed Tasks: ${context.completedTasks.map((t) => `• ${t.title}`).join("\n")}
-- Remaining Tasks: ${context.currentTasks
-      .filter((t) => t.id !== task.id)
-      .map((t) => `• ${t.title} (${t.status})`)
-      .join("\n")}
+- Completed Tasks: ${context.completedTasks.map((t) => `• ${t.title}`).join("\n") || "None"}
+- Remaining Tasks: ${
+      context.currentTasks
+        .filter((t) => t.id !== task.id)
+        .map((t) => `• ${t.title} (${t.status})`)
+        .join("\n") || "None"
+    }
 
 Your job is to work on the current task and provide a structured response. You can either:
 1. Complete the task with results
@@ -277,6 +311,7 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
             ai_executed: true,
             tokens_used: result.tokensUsed,
             execution_time: result.executionTime,
+            executed_by_user_llm: true,
           },
         })
         .eq("id", task.id)
@@ -296,6 +331,7 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
             generated_by_task: task.id,
             ai_generated: true,
             parent_execution: true,
+            generated_by_user_llm: true,
           },
         }))
 
@@ -323,6 +359,7 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
             generated_by_task: task.id,
             ai_generated: true,
             requires_approval: true,
+            generated_by_user_llm: true,
           },
         }))
 
@@ -351,6 +388,7 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
               last_task_completed: task.id,
               last_execution_result: result.nextAction,
               tokens_used_total: (context as any).totalTokens + (result.tokensUsed || 0),
+              using_user_llm: true,
             },
           })
           .eq("id", context.agentId)
@@ -432,7 +470,7 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
   }
 
   /**
-   * Start continuous agent execution
+   * Start continuous agent execution using user's LLM providers
    */
   async startAgentExecution(agentId: string): Promise<{
     success: boolean
@@ -445,12 +483,31 @@ Focus on being helpful, thorough, and creating clear next steps. If you need hum
         return { success: false, error: "Failed to build execution context" }
       }
 
+      // Check if user has LLM providers configured
+      const availableProviders = await LLMService.getAvailableProviders(context.userId)
+
+      if (availableProviders.length === 0) {
+        await this.logAgentActivity(
+          context.agentId,
+          "warning",
+          "⚠️ No LLM providers configured. Please add API keys in Settings to enable AI execution.",
+          { available_providers: 0 },
+        )
+
+        return {
+          success: false,
+          error: "No LLM providers configured. Please add API keys in Settings.",
+        }
+      }
+
+      console.log(`🔑 User has ${availableProviders.length} LLM providers configured: ${availableProviders.join(", ")}`)
+
       // Start execution in background
       this.executeAgentContinuously(context)
 
       return {
         success: true,
-        message: `Agent ${context.agentName} execution started`,
+        message: `Agent ${context.agentName} execution started using your ${availableProviders.join(", ")} provider(s)`,
       }
     } catch (error) {
       return {
