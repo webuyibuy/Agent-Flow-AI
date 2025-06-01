@@ -12,7 +12,7 @@ items:
 ## 1. Enhanced Dependency Basket
 with SLA Tracking
 
-```ts file="app/dashboard/dependencies/actions.ts"
+\`\`\`ts file="app/dashboard/dependencies/actions.ts"
 [v0-no-op-code-block-prefix]export async function updateDependencySLA(dependencyId: string, slaHours: number) {
   const supabase = createClient()
   
