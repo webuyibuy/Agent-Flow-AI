@@ -221,127 +221,124 @@ export default function AppleLayout({ children, user }: AppleLayoutProps) {
         )}
       </AnimatePresence>
 
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top header */}
-        <header
-          className={`sticky top-0 z-10 flex h-16 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 ${
-            isScrolled ? "shadow-md" : ""
-          }`}
+      {/* Top header */}
+      <header
+        className={`lg:pl-64 sticky top-0 z-10 flex h-16 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 ${
+          isScrolled ? "shadow-md" : ""
+        }`}
+      >
+        <button
+          type="button"
+          className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(true)}
         >
-          <button
-            type="button"
-            className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
-            onClick={() => setIsMobileMenuOpen(true)}
-          >
-            <MenuIcon className="h-6 w-6" aria-hidden="true" />
-          </button>
+          <MenuIcon className="h-6 w-6" aria-hidden="true" />
+        </button>
 
-          {/* Logo for mobile */}
-          <div className="flex lg:hidden">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                <BrainIcon className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-lg font-semibold text-gray-900">AgentFlow</span>
-            </Link>
-          </div>
-
-          <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="relative flex flex-1 items-center">
-              <SearchIcon className="pointer-events-none absolute left-4 h-5 w-5 text-gray-400" aria-hidden="true" />
-              <input
-                type="search"
-                name="search"
-                id="search"
-                placeholder="Search agents, tasks..."
-                className="h-10 block w-full rounded-full border-0 bg-gray-50 py-1.5 pl-12 pr-4 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm"
-              />
+        {/* Logo for mobile */}
+        <div className="flex lg:hidden">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+              <BrainIcon className="h-5 w-5 text-white" />
             </div>
+            <span className="text-lg font-semibold text-gray-900">AgentFlow</span>
+          </Link>
+        </div>
+
+        <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+          <div className="relative flex flex-1 items-center">
+            <SearchIcon className="pointer-events-none absolute left-4 h-5 w-5 text-gray-400" aria-hidden="true" />
+            <input
+              type="search"
+              name="search"
+              id="search"
+              placeholder="Search agents, tasks..."
+              className="h-10 block w-full rounded-full border-0 bg-gray-50 py-1.5 pl-12 pr-4 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm"
+            />
           </div>
+        </div>
 
-          <div className="flex items-center gap-x-4 lg:gap-x-6">
-            {/* Notifications */}
-            <div className="relative">
-              <button
-                type="button"
-                className="-m-1.5 flex items-center justify-center p-1.5 text-gray-400 hover:text-gray-500"
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-              >
-                <BellIcon className="h-6 w-6" aria-hidden="true" />
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white">
-                  2
-                </span>
-              </button>
+        <div className="flex items-center gap-x-4 lg:gap-x-6">
+          {/* Notifications */}
+          <div className="relative">
+            <button
+              type="button"
+              className="-m-1.5 flex items-center justify-center p-1.5 text-gray-400 hover:text-gray-500"
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            >
+              <BellIcon className="h-6 w-6" aria-hidden="true" />
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white">
+                2
+              </span>
+            </button>
 
-              {/* Notifications dropdown */}
-              <AnimatePresence>
-                {isNotificationsOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute right-0 z-10 mt-2 w-80 origin-top-right rounded-lg bg-white py-2 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
-                  >
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                      <div className="px-4 py-3 hover:bg-gray-50">
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                              <TargetIcon className="h-4 w-4 text-blue-600" />
-                            </div>
-                          </div>
-                          <div className="ml-3 w-0 flex-1">
-                            <p className="text-sm font-medium text-gray-900">New Task Assigned</p>
-                            <p className="mt-1 text-sm text-gray-500">Process customer inquiries</p>
+            {/* Notifications dropdown */}
+            <AnimatePresence>
+              {isNotificationsOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 z-10 mt-2 w-80 origin-top-right rounded-lg bg-white py-2 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                >
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    <div className="px-4 py-3 hover:bg-gray-50">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <TargetIcon className="h-4 w-4 text-blue-600" />
                           </div>
                         </div>
-                      </div>
-                      <div className="px-4 py-3 hover:bg-gray-50">
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                              <BrainIcon className="h-4 w-4 text-green-600" />
-                            </div>
-                          </div>
-                          <div className="ml-3 w-0 flex-1">
-                            <p className="text-sm font-medium text-gray-900">Agent Status Update</p>
-                            <p className="mt-1 text-sm text-gray-500">Customer Support Agent is now active</p>
-                          </div>
+                        <div className="ml-3 w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900">New Task Assigned</p>
+                          <p className="mt-1 text-sm text-gray-500">Process customer inquiries</p>
                         </div>
                       </div>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    <div className="px-4 py-3 hover:bg-gray-50">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                            <BrainIcon className="h-4 w-4 text-green-600" />
+                          </div>
+                        </div>
+                        <div className="ml-3 w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900">Agent Status Update</p>
+                          <p className="mt-1 text-sm text-gray-500">Customer Support Agent is now active</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-            {/* Profile dropdown */}
-            <div className="relative">
-              <div className="flex items-center gap-x-3">
-                {user && (
-                  <>
-                    <div className="hidden lg:flex lg:items-center lg:gap-x-2">
-                      <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
-                      <span className="text-sm font-medium text-white">{user.name.charAt(0).toUpperCase()}</span>
-                    </div>
-                  </>
-                )}
-              </div>
+          {/* Profile dropdown */}
+          <div className="relative">
+            <div className="flex items-center gap-x-3">
+              {user && (
+                <>
+                  <div className="hidden lg:flex lg:items-center lg:gap-x-2">
+                    <span className="text-sm font-medium text-gray-900">{user.name}</span>
+                  </div>
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">{user.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="py-8">
-          <div className="px-4 sm:px-6 lg:px-8">{children}</div>
-        </main>
-      </div>
+      <main className="lg:pl-64 py-8">
+        <div className="px-4 sm:px-6 lg:px-8">{children}</div>
+      </main>
     </div>
   )
 }
