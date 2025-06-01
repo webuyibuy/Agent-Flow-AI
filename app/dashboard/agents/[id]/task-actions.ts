@@ -8,6 +8,127 @@ import { sendSlackNotification } from "@/lib/slack-notifications"
 import { getDefaultUserId } from "@/lib/default-user"
 import { triggerAgentExecution } from "./actions"
 
+interface CreateTaskParams {
+  agentId: string
+  title: string
+  description?: string
+  priority?: number
+  dueDate?: string
+}
+
+export async function createTask(params: CreateTaskParams) {
+  try {
+    const { agentId, title, description = "", priority = 1, dueDate = null } = params
+
+    const supabase = getSupabaseFromServer()
+    const userId = await getDefaultUserId()
+
+    // Verify agent ownership
+    const { data: agent, error: agentError } = await supabase
+      .from("agents")
+      .select("*")
+      .eq("id", agentId)
+      .eq("owner_id", userId)
+      .single()
+
+    if (agentError || !agent) {
+      console.error("Agent access error:", agentError)
+      return {
+        success: false,
+        error: "You don't have access to this agent or it doesn't exist",
+      }
+    }
+
+    // Create the task
+    const now = new Date().toISOString()
+    const { data: task, error: taskError } = await supabase
+      .from("tasks")
+      .insert({
+        agent_id: agentId,
+        title,
+        description,
+        status: "pending",
+        priority,
+        due_date: dueDate,
+        created_at: now,
+        updated_at: now,
+        completion_percentage: 0,
+      })
+      .select()
+      .single()
+
+    if (taskError) {
+      console.error("Task creation error:", taskError)
+      return { success: false, error: "Failed to create task" }
+    }
+
+    revalidatePath(`/dashboard/agents/${agentId}`)
+
+    return {
+      success: true,
+      task,
+    }
+  } catch (error) {
+    console.error("Task creation error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error creating task",
+    }
+  }
+}
+
+export async function updateTaskStatus(taskId: string, status: string) {
+  try {
+    const supabase = getSupabaseFromServer()
+    const userId = await getDefaultUserId()
+
+    // Get the task and verify ownership through agent
+    const { data: task, error: taskError } = await supabase
+      .from("tasks")
+      .select("*, agents!inner(*)")
+      .eq("id", taskId)
+      .single()
+
+    if (taskError || !task) {
+      console.error("Task fetch error:", taskError)
+      return { success: false, error: "Task not found" }
+    }
+
+    // @ts-ignore - We know agents exists from the join
+    if (task.agents.owner_id !== userId) {
+      return { success: false, error: "You don't have access to this task" }
+    }
+
+    // Update the task status
+    const { error: updateError } = await supabase
+      .from("tasks")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+        completion_percentage: status === "completed" ? 100 : task.completion_percentage,
+      })
+      .eq("id", taskId)
+
+    if (updateError) {
+      console.error("Task update error:", updateError)
+      return { success: false, error: "Failed to update task status" }
+    }
+
+    // @ts-ignore - We know agent_id exists
+    revalidatePath(`/dashboard/agents/${task.agent_id}`)
+
+    return {
+      success: true,
+    }
+  } catch (error) {
+    console.error("Task update error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error updating task",
+    }
+  }
+}
+
 const TaskCreationSchema = z.object({
   title: z
     .string()
@@ -76,7 +197,7 @@ export interface TaskActionResult {
   message?: string
 }
 
-export async function createTask(
+export async function createTaskLegacy(
   agentId: string,
   prevState: TaskCreationState | undefined,
   formData: FormData,
@@ -196,7 +317,7 @@ export async function createTask(
   }
 }
 
-export async function updateTask(
+export async function updateTaskLegacy(
   taskId: string,
   prevState: TaskEditState | undefined,
   formData: FormData,

@@ -1,110 +1,114 @@
 "use server"
 
-import { getSupabaseFromServer, getSupabaseAdmin } from "@/lib/supabase/server"
-import { revalidatePath } from "next/cache"
+import { getSupabaseFromServer } from "@/lib/supabase/server"
 import { getDefaultUserId } from "@/lib/default-user"
-import { IntelligentAgentOrchestrator } from "@/lib/intelligent-agent-orchestrator"
+import { revalidatePath } from "next/cache"
 
-// Simple interface for execution results
-export interface ExecutionResult {
-  success: boolean
-  message?: string
-  error?: string
-}
-
-export async function triggerAgentExecution(agentId: string): Promise<ExecutionResult> {
-  console.log(`Testing agent execution for: ${agentId}`)
-  return await startAgentExecution(agentId)
-}
-
-export async function startAgentExecution(agentId: string): Promise<ExecutionResult> {
+export async function startAgentExecution(agentId: string) {
   try {
     const supabase = getSupabaseFromServer()
-    const supabaseAdmin = getSupabaseAdmin()
+    const userId = await getDefaultUserId()
 
-    // Get user ID
-    let userId: string
-    try {
-      userId = await getDefaultUserId()
-      console.log(`Using user ID: ${userId}`)
-    } catch (error) {
-      console.error("Error getting default user ID:", error)
-      return {
-        success: false,
-        error: "Authentication required",
-      }
-    }
-
-    // Get agent details
-    console.log(`Looking for agent: ${agentId}`)
+    // Verify agent ownership
     const { data: agent, error: agentError } = await supabase
       .from("agents")
-      .select("id, name, agent_type, goal, status, owner_id")
+      .select("*")
       .eq("id", agentId)
+      .eq("owner_id", userId)
       .single()
 
     if (agentError || !agent) {
-      console.log("Agent not found with exact ID")
+      console.error("Agent access error:", agentError)
       return {
         success: false,
-        error: "Agent not found in database",
+        error: "You don't have access to this agent or it doesn't exist",
       }
     }
 
-    console.log(`Found agent: ${agent.name} (${agent.id}) with owner: ${agent.owner_id}`)
+    // Update agent status to executing
+    const { error: updateError } = await supabase.from("agents").update({ status: "executing" }).eq("id", agentId)
 
-    // Check if agent is already active
-    if (agent.status === "active") {
-      // Just log that execution was triggered
-      await supabaseAdmin.from("agent_logs").insert({
-        agent_id: agentId,
-        user_id: userId,
-        log_type: "info",
-        message: "Agent execution triggered manually.",
-        created_at: new Date().toISOString(),
-      })
-
-      return { success: true, message: "Agent is already active and working." }
+    if (updateError) {
+      console.error("Agent status update error:", updateError)
+      return { success: false, error: "Failed to update agent status" }
     }
 
-    // Create a test task
-    console.log("Creating test task for execution")
-    const { data: newTask, error: createTaskError } = await supabaseAdmin
+    // Get agent's tasks
+    const { data: tasks, error: tasksError } = await supabase
       .from("tasks")
-      .insert({
-        agent_id: agentId,
-        title: "Test Task - Agent Execution",
-        status: "todo",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single()
+      .select("*")
+      .eq("agent_id", agentId)
+      .order("priority", { ascending: false })
 
-    if (createTaskError || !newTask) {
-      console.error("Error creating test task:", createTaskError)
-      return {
-        success: false,
-        error: `Failed to create test task: ${createTaskError?.message}`,
+    if (tasksError) {
+      console.error("Tasks fetch error:", tasksError)
+      return { success: false, error: "Failed to fetch agent tasks" }
+    }
+
+    // Simulate execution with logs
+    const logs = [
+      `Agent "${agent.name}" execution started`,
+      `Found ${tasks?.length || 0} tasks to process`,
+      "Analyzing tasks and dependencies...",
+      "Prioritizing work items...",
+      "Beginning task execution sequence...",
+    ]
+
+    // Process each task (simulated)
+    if (tasks && tasks.length > 0) {
+      for (const task of tasks.slice(0, 3)) {
+        // Process up to 3 tasks for demo
+        logs.push(`Processing task: ${task.title}`)
+
+        // Update task status
+        await supabase
+          .from("tasks")
+          .update({
+            status: "in_progress",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", task.id)
+
+        // Simulate thinking
+        logs.push(`Analyzing task requirements for "${task.title}"`)
+        logs.push(`Generating solution approach...`)
+
+        // Simulate completion for demo
+        if (Math.random() > 0.3) {
+          await supabase
+            .from("tasks")
+            .update({
+              status: "completed",
+              completion_percentage: 100,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", task.id)
+
+          logs.push(`✅ Completed task: ${task.title}`)
+        } else {
+          logs.push(`⚠️ Task "${task.title}" requires human input`)
+
+          // Create a dependency
+          const { error: depError } = await supabase.from("dependencies").insert({
+            task_id: task.id,
+            agent_id: agentId,
+            description: `Human input needed for task: ${task.title}`,
+            status: "pending",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+
+          if (!depError) {
+            logs.push(`Created dependency for human input`)
+          }
+        }
       }
+    } else {
+      logs.push("No tasks found to execute")
     }
 
-    console.log(`Created test task with ID: ${newTask.id}`)
-
-    // Update task with result
-    await supabaseAdmin
-      .from("tasks")
-      .update({
-        status: "done",
-        output_summary: "Test execution completed successfully.",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", newTask.id)
-
-    console.log("Test execution completed successfully")
-
-    // Update agent status to active
-    const { error: updateError } = await supabaseAdmin
+    // Update agent status back to active
+    await supabase
       .from("agents")
       .update({
         status: "active",
@@ -112,120 +116,65 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
       })
       .eq("id", agentId)
 
-    if (updateError) {
-      console.error("Error updating agent status:", updateError)
-      return { success: false, error: "Failed to activate agent." }
-    }
+    logs.push("Agent execution completed")
 
-    // Check for any incomplete tasks
-    const { data: incompleteTasks, error: tasksError } = await supabase
-      .from("tasks")
-      .select("id")
-      .eq("agent_id", agentId)
-      .in("status", ["todo", "in_progress", "blocked"])
-      .limit(1)
-
-    // If no incomplete tasks, create new ones using the orchestrator
-    if (!tasksError && (!incompleteTasks || incompleteTasks.length === 0)) {
-      try {
-        // Get user inputs from agent metadata
-        const userInputs = agent.metadata?.user_inputs || {}
-
-        // Initialize the agent with intelligent tasks
-        await IntelligentAgentOrchestrator.initiateAgentWorkflow({
-          agentId,
-          agentName: agent.name || "Agent",
-          agentGoal: agent.goal || "Complete tasks",
-          userInputs,
-          userId,
-        })
-      } catch (orchError) {
-        console.error("Error initializing agent workflow:", orchError)
-        // Continue even if orchestrator fails - we'll just log it
-        await supabaseAdmin.from("agent_logs").insert({
-          agent_id: agentId,
-          user_id: userId,
-          log_type: "error",
-          message: "Failed to generate intelligent workflow. Using basic execution.",
-          created_at: new Date().toISOString(),
-        })
-      }
-    }
-
-    // Log that agent was started
-    await supabaseAdmin.from("agent_logs").insert({
-      agent_id: agentId,
-      user_id: userId,
-      log_type: "milestone",
-      message: "Agent execution started manually.",
-      created_at: new Date().toISOString(),
-    })
-
-    // Revalidate the page to show updates
     revalidatePath(`/dashboard/agents/${agentId}`)
 
     return {
       success: true,
-      message: "Agent execution started successfully.",
+      logs,
     }
   } catch (error) {
-    console.error("Error in startAgentExecution:", error)
+    console.error("Agent execution error:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
+      error: error instanceof Error ? error.message : "Unknown execution error",
+      logs: ["Execution failed due to an error"],
     }
   }
 }
 
-// Add function to toggle agent status
-export async function toggleAgentStatus(agentId: string, currentStatus: string): Promise<ExecutionResult> {
+export async function stopAgentExecution(agentId: string) {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
+    const supabase = getSupabaseFromServer()
+    const userId = await getDefaultUserId()
 
-    // Toggle the status
-    const newStatus = currentStatus === "active" ? "paused" : "active"
+    // Verify agent ownership
+    const { data: agent, error: agentError } = await supabase
+      .from("agents")
+      .select("*")
+      .eq("id", agentId)
+      .eq("owner_id", userId)
+      .single()
 
-    const { error } = await supabaseAdmin
+    if (agentError || !agent) {
+      return { success: false, message: "You don't have access to this agent or it doesn't exist" }
+    }
+
+    // Update agent status to paused
+    const { error: updateError } = await supabase
       .from("agents")
       .update({
-        status: newStatus,
+        status: "paused",
         updated_at: new Date().toISOString(),
       })
       .eq("id", agentId)
 
-    if (error) {
-      console.error("Error updating agent status:", error)
-      return {
-        success: false,
-        error: `Failed to update agent status: ${error.message}`,
-      }
+    if (updateError) {
+      return { success: false, message: "Failed to update agent status" }
     }
 
-    // Create a log entry
-    try {
-      await supabaseAdmin.from("agent_logs").insert({
-        agent_id: agentId,
-        log_type: "info",
-        message: `Agent status changed to ${newStatus}`,
-        created_at: new Date().toISOString(),
-      })
-    } catch (logError) {
-      console.error("Error creating log entry:", logError)
-      // Continue even if logging fails
-    }
-
-    // Refresh the page to show changes
     revalidatePath(`/dashboard/agents/${agentId}`)
 
     return {
       success: true,
-      message: `Agent status updated to ${newStatus}`,
+      message: "Agent execution stopped successfully",
     }
   } catch (error) {
-    console.error("Error toggling agent status:", error)
+    console.error("Stop execution error:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
+      message: error instanceof Error ? error.message : "Unknown error stopping execution",
     }
   }
 }
