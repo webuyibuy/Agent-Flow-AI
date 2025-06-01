@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { Home, Bot, GitBranch, BarChart3, Bell, Settings, Zap } from "lucide-react"
+import { Home, Bot, GitBranch, BarChart3, Bell, Settings } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,6 @@ const navigationItems = [
   { name: "Dependencies", href: "/dashboard/dependencies", icon: GitBranch },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
-  { name: "Test LLM", href: "/test-llm", icon: Zap },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
