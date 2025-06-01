@@ -1,48 +1,94 @@
 "use client"
 
 import type React from "react"
-import { motion } from "framer-motion"
+import { forwardRef } from "react"
+import { motion, type MotionProps } from "framer-motion"
 
-interface AppleCardProps {
+interface AppleCardProps extends React.HTMLAttributes<HTMLDivElement>, MotionProps {
   children: React.ReactNode
   className?: string
-  variant?: "elevated" | "flat" | "glass"
-  padding?: "none" | "sm" | "md" | "lg"
+  variant?: "elevated" | "flat" | "glass" | "subtle"
+  padding?: "none" | "xs" | "sm" | "md" | "lg" | "xl"
   hover?: boolean
+  interactive?: boolean
+  borderRadius?: "sm" | "md" | "lg" | "xl"
 }
 
-export default function AppleCard({
-  children,
-  className = "",
-  variant = "elevated",
-  padding = "md",
-  hover = false,
-}: AppleCardProps) {
-  const baseClasses = "rounded-xl border transition-all duration-200"
+const AppleCard = forwardRef<HTMLDivElement, AppleCardProps>(
+  (
+    {
+      children,
+      className = "",
+      variant = "elevated",
+      padding = "md",
+      hover = false,
+      interactive = false,
+      borderRadius = "lg",
+      ...props
+    },
+    ref,
+  ) => {
+    // Base classes with Apple's precise styling
+    const baseClasses = "transition-all duration-200"
 
-  const variants = {
-    elevated: "bg-white border-gray-200 shadow-sm hover:shadow-md",
-    flat: "bg-gray-50 border-gray-200",
-    glass: "bg-white/80 backdrop-blur-xl border-gray-200/50 shadow-sm",
-  }
+    // Apple's precise variants
+    const variants = {
+      elevated: "bg-white border border-[#E5E5EA] shadow-sm",
+      flat: "bg-[#F2F2F7] border border-[#E5E5EA]",
+      glass: "bg-white/80 backdrop-blur-xl border border-[#E5E5EA]/50 shadow-sm",
+      subtle: "bg-[#F9FAFB] border border-[#E5E5EA]",
+    }
 
-  const paddings = {
-    none: "",
-    sm: "p-4",
-    md: "p-6",
-    lg: "p-8",
-  }
+    // Apple's precise padding
+    const paddings = {
+      none: "",
+      xs: "p-2",
+      sm: "p-3",
+      md: "p-4",
+      lg: "p-6",
+      xl: "p-8",
+    }
 
-  const hoverProps = hover
-    ? {
-        whileHover: { y: -2, scale: 1.01 },
-        transition: { type: "spring", stiffness: 300, damping: 30 },
-      }
-    : {}
+    // Apple's precise border radius
+    const radii = {
+      sm: "rounded-md", // 6px
+      md: "rounded-lg", // 8px
+      lg: "rounded-xl", // 12px
+      xl: "rounded-2xl", // 16px
+    }
 
-  return (
-    <motion.div className={`${baseClasses} ${variants[variant]} ${paddings[padding]} ${className}`} {...hoverProps}>
-      {children}
-    </motion.div>
-  )
-}
+    // Interactive props for hover effects
+    const interactiveProps = interactive
+      ? {
+          whileHover: { y: -2, scale: 1.01, boxShadow: "0 8px 16px rgba(0,0,0,0.08)" },
+          whileTap: { scale: 0.99 },
+          transition: { type: "spring", stiffness: 400, damping: 17 },
+        }
+      : {}
+
+    // Hover props for subtle hover effects
+    const hoverProps =
+      hover && !interactive
+        ? {
+            whileHover: { y: -2, boxShadow: "0 8px 16px rgba(0,0,0,0.08)" },
+            transition: { type: "spring", stiffness: 300, damping: 30 },
+          }
+        : {}
+
+    return (
+      <motion.div
+        ref={ref}
+        className={`${baseClasses} ${variants[variant]} ${paddings[padding]} ${radii[borderRadius]} ${className}`}
+        {...interactiveProps}
+        {...hoverProps}
+        {...props}
+      >
+        {children}
+      </motion.div>
+    )
+  },
+)
+
+AppleCard.displayName = "AppleCard"
+
+export default AppleCard
