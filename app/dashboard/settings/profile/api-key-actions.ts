@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseFromServer } from "@/lib/supabase/server"
-import { encrypt, decrypt } from "@/lib/encryption"
+import { encrypt, safeDecrypt, isKeyEncrypted, migrateExistingApiKey } from "@/lib/encryption"
 import { revalidatePath } from "next/cache"
 import { getDefaultUserId } from "@/lib/default-user"
 
@@ -20,7 +20,7 @@ export interface ApiKeyWithModel {
 }
 
 export async function saveApiKey(prevState: ApiKeyState | undefined, formData: FormData): Promise<ApiKeyState> {
-  console.log("🔑 Starting saveApiKey action...")
+  console.log("🔑 Starting saveApiKey action with encryption...")
 
   const supabase = getSupabaseFromServer()
 
@@ -63,13 +63,13 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       return { error: `An API key with the name "${keyName}" already exists for ${provider}.` }
     }
 
-    // Encrypt the API key
-    console.log("🔐 Encrypting API key...")
+    // Encrypt the API key with enhanced security
+    console.log("🔐 Encrypting API key with AES-256-GCM...")
     const encryptedKey = encrypt(apiKey)
-    console.log("✅ API key encrypted successfully")
+    console.log("✅ API key encrypted successfully with authentication tag")
 
     // Save to database with preferred model
-    console.log("💾 Saving to database...")
+    console.log("💾 Saving encrypted key to database...")
     const insertData = {
       user_id: userId,
       provider,
@@ -79,7 +79,7 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       created_at: new Date().toISOString(),
     }
 
-    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED]" })
+    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED_WITH_AES256]" })
 
     const { data, error: insertError } = await supabase.from("api_keys").insert(insertData).select()
 
@@ -88,11 +88,11 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       return { error: `Failed to save API key: ${insertError.message}` }
     }
 
-    console.log("✅ API key saved successfully:", data)
+    console.log("✅ Encrypted API key saved successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return {
       success: true,
-      message: `🎉 API key for ${provider} saved successfully! You can now use ${preferredModel || getDefaultModel(provider)} for AI operations.`,
+      message: `🔐 API key for ${provider} saved and encrypted successfully! You can now use ${preferredModel || getDefaultModel(provider)} for AI operations.`,
     }
   } catch (error) {
     console.error("❌ Unexpected error in saveApiKey:", error)
@@ -221,7 +221,7 @@ export async function deleteApiKey(prevState: ApiKeyState | undefined, formData:
       return { error: "API key not found or you don't have permission to delete it." }
     }
 
-    console.log("✅ API key deleted successfully:", data)
+    console.log("✅ Encrypted API key deleted successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return { success: true, message: "🗑️ API key deleted successfully!" }
   } catch (error) {
@@ -295,8 +295,26 @@ export async function getDecryptedApiKey(provider: string, userId?: string): Pro
       return null
     }
 
-    console.log("🔓 Decrypting API key...")
-    const decryptedKey = decrypt(data.encrypted_key)
+    console.log("🔓 Decrypting API key with enhanced security...")
+
+    // Handle both encrypted and legacy plain text keys
+    const decryptedKey = safeDecrypt(data.encrypted_key)
+
+    // If key was plain text, migrate it to encrypted format
+    if (!isKeyEncrypted(data.encrypted_key)) {
+      console.log("🔄 Migrating plain text key to encrypted format...")
+      const encryptedKey = migrateExistingApiKey(decryptedKey)
+
+      // Update the database with encrypted version
+      await supabase
+        .from("api_keys")
+        .update({ encrypted_key: encryptedKey })
+        .eq("user_id", targetUserId)
+        .eq("provider", provider)
+
+      console.log("✅ Key migrated to encrypted format")
+    }
+
     console.log("✅ API key decrypted successfully")
     return decryptedKey
   } catch (error) {
@@ -341,5 +359,46 @@ export async function getPreferredModel(provider: string, userId?: string): Prom
   } catch (error) {
     console.error("❌ Error getting preferred model:", error)
     return getDefaultModel(provider)
+  }
+}
+
+// Migration utility for existing users
+export async function migrateAllApiKeys(): Promise<{ migrated: number; errors: number }> {
+  console.log("🔄 Starting migration of all API keys to encrypted format...")
+
+  const supabase = getSupabaseFromServer()
+  let migrated = 0
+  let errors = 0
+
+  try {
+    const { data: allKeys, error } = await supabase.from("api_keys").select("id, user_id, provider, encrypted_key")
+
+    if (error) {
+      console.error("❌ Error fetching keys for migration:", error)
+      return { migrated: 0, errors: 1 }
+    }
+
+    for (const key of allKeys || []) {
+      try {
+        if (!isKeyEncrypted(key.encrypted_key)) {
+          console.log(`🔄 Migrating key ${key.id} for provider ${key.provider}...`)
+          const encryptedKey = migrateExistingApiKey(key.encrypted_key)
+
+          await supabase.from("api_keys").update({ encrypted_key: encryptedKey }).eq("id", key.id)
+
+          migrated++
+          console.log(`✅ Migrated key ${key.id}`)
+        }
+      } catch (keyError) {
+        console.error(`❌ Error migrating key ${key.id}:`, keyError)
+        errors++
+      }
+    }
+
+    console.log(`✅ Migration complete: ${migrated} keys migrated, ${errors} errors`)
+    return { migrated, errors }
+  } catch (error) {
+    console.error("❌ Migration failed:", error)
+    return { migrated, errors: errors + 1 }
   }
 }

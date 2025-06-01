@@ -17,9 +17,9 @@ export function encryptApiKey(apiKey: string): EncryptedData {
   // Generate a random initialization vector
   const iv = crypto.randomBytes(16)
 
-  // Create cipher
-  const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY)
-  cipher.setAAD(Buffer.from("api-key-data"))
+  // Create cipher with proper key derivation
+  const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32)
+  const cipher = crypto.createCipherGCM(ALGORITHM, key, iv)
 
   // Encrypt the API key
   let encrypted = cipher.update(apiKey, "utf8", "hex")
@@ -39,9 +39,9 @@ export function decryptApiKey(encryptedData: EncryptedData): string {
   try {
     const { encrypted, iv, tag } = encryptedData
 
-    // Create decipher
-    const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY)
-    decipher.setAAD(Buffer.from("api-key-data"))
+    // Create decipher with proper key derivation
+    const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32)
+    const decipher = crypto.createDecipherGCM(ALGORITHM, key, Buffer.from(iv, "hex"))
     decipher.setAuthTag(Buffer.from(tag, "hex"))
 
     // Decrypt the API key
@@ -55,7 +55,7 @@ export function decryptApiKey(encryptedData: EncryptedData): string {
   }
 }
 
-// Simple encrypt/decrypt functions for the new API key system
+// Enhanced encrypt/decrypt functions with better security
 export function encrypt(text: string): string {
   if (!text) {
     throw new Error("Text cannot be empty")
@@ -63,7 +63,8 @@ export function encrypt(text: string): string {
 
   try {
     const iv = crypto.randomBytes(16)
-    const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY)
+    const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32)
+    const cipher = crypto.createCipherGCM(ALGORITHM, key, iv)
 
     let encrypted = cipher.update(text, "utf8", "hex")
     encrypted += cipher.final("hex")
@@ -93,7 +94,8 @@ export function decrypt(encryptedText: string): string {
     const data = JSON.parse(encryptedText)
     const { iv, tag, encrypted } = data
 
-    const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY)
+    const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32)
+    const decipher = crypto.createDecipherGCM(ALGORITHM, key, Buffer.from(iv, "hex"))
     decipher.setAuthTag(Buffer.from(tag, "hex"))
 
     let decrypted = decipher.update(encrypted, "hex", "utf8")
@@ -135,4 +137,36 @@ export function retrieveApiKeyFromStorage(encryptedString: string): string {
     console.error("Failed to retrieve API key from storage:", error)
     throw new Error("Failed to retrieve API key")
   }
+}
+
+// Migration helper for existing plain text keys
+export function migrateExistingApiKey(plainTextKey: string): string {
+  console.log("🔄 Migrating existing API key to encrypted format...")
+  return encrypt(plainTextKey)
+}
+
+// Validation helper to check if a key is already encrypted
+export function isKeyEncrypted(keyData: string): boolean {
+  try {
+    const parsed = JSON.parse(keyData)
+    return isEncryptedData(parsed) || (parsed.iv && parsed.tag && parsed.encrypted)
+  } catch {
+    return false
+  }
+}
+
+// Safe decryption that handles both encrypted and plain text (for migration)
+export function safeDecrypt(keyData: string): string {
+  if (!keyData) {
+    throw new Error("Key data cannot be empty")
+  }
+
+  // If it's already plain text (not encrypted), return as-is but log warning
+  if (!isKeyEncrypted(keyData)) {
+    console.warn("⚠️ Found unencrypted API key - should be migrated")
+    return keyData
+  }
+
+  // Otherwise decrypt normally
+  return decrypt(keyData)
 }
