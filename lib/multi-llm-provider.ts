@@ -262,47 +262,59 @@ export class MultiLLMProvider {
     messages: LLMMessage[],
     options: { model: string; temperature: number; maxTokens: number },
   ): Promise<LLMResponse | LLMError> {
+    console.log(`📡 Making request to ${provider.name} API...`)
+
     // Convert messages format for Anthropic
     const systemMessage = messages.find((m) => m.role === "system")?.content || ""
     const conversationMessages = messages.filter((m) => m.role !== "system")
 
-    const response = await fetch(`${provider.baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: options.model,
-        max_tokens: options.maxTokens,
-        temperature: options.temperature,
-        system: systemMessage,
-        messages: conversationMessages,
-      }),
-    })
+    try {
+      const response = await fetch(`${provider.baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": "application/json",
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: options.maxTokens,
+          temperature: options.temperature,
+          system: systemMessage,
+          messages: conversationMessages,
+        }),
+      })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      return {
-        error: `${provider.name} API error: ${response.status} - ${errorData.error?.message || "Unknown error"}`,
-        provider: provider.id,
-        statusCode: response.status,
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        return {
+          error: `${provider.name} API error: ${response.status} - ${errorData.error?.message || "Unknown error"}`,
+          provider: provider.id,
+          statusCode: response.status,
+        }
       }
-    }
 
-    const data = await response.json()
-    return {
-      content: data.content[0]?.text || "",
-      usage: data.usage
-        ? {
-            promptTokens: data.usage.input_tokens,
-            completionTokens: data.usage.output_tokens,
-            totalTokens: data.usage.input_tokens + data.usage.output_tokens,
-          }
-        : undefined,
-      model: data.model,
-      finishReason: data.stop_reason,
+      const data = await response.json()
+      console.log(`✅ ${provider.name} response received successfully`)
+
+      return {
+        content: data.content[0]?.text || "",
+        usage: data.usage
+          ? {
+              promptTokens: data.usage.input_tokens,
+              completionTokens: data.usage.output_tokens,
+              totalTokens: data.usage.input_tokens + data.usage.output_tokens,
+            }
+          : undefined,
+        model: data.model,
+        finishReason: data.stop_reason,
+      }
+    } catch (error) {
+      console.error(`❌ Network error calling ${provider.name}:`, error)
+      return {
+        error: `Network error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        provider: provider.id,
+      }
     }
   }
 

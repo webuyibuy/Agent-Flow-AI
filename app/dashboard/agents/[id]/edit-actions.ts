@@ -1,76 +1,161 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
-import { z } from "zod"
+import { getSupabaseFromServer } from "@/lib/supabase/server"
+import { getDefaultUserId } from "@/lib/default-user"
 
-const updateAgentSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  goal: z.string().min(1, "Goal is required"),
-})
+interface DeleteAgentResult {
+  success: boolean
+  message: string
+  agentId?: string
+}
 
-export type UpdateAgentInput = z.infer<typeof updateAgentSchema>
-
-export async function updateAgent(agentId: string, data: UpdateAgentInput) {
+export async function deleteAgent(
+  prevState: DeleteAgentResult | undefined,
+  formData: FormData,
+): Promise<DeleteAgentResult> {
   try {
-    // Validate input
-    const validatedData = updateAgentSchema.parse(data)
+    const agentId = formData.get("agentId") as string
 
-    // Get supabase client
-    const supabase = createServerActionClient({ cookies })
-
-    // Get current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: "Authentication required" }
+    if (!agentId) {
+      return {
+        success: false,
+        message: "Agent ID is required",
+      }
     }
 
-    // Verify agent ownership
-    const { data: agent, error: fetchError } = await supabase
+    const supabase = getSupabaseFromServer()
+    const userId = await getDefaultUserId()
+
+    console.log(`[deleteAgent] Starting deletion process for agent ${agentId}`)
+
+    // First, verify the agent exists and belongs to the user
+    const { data: agent, error: agentError } = await supabase
       .from("agents")
-      .select("user_id")
+      .select("id, name, status")
       .eq("id", agentId)
+      .eq("owner_id", userId)
       .single()
 
-    if (fetchError || !agent) {
-      return { success: false, error: "Agent not found" }
+    if (agentError || !agent) {
+      console.error(`[deleteAgent] Agent not found or access denied:`, agentError)
+      return {
+        success: false,
+        message: "Agent not found or you don't have permission to delete it",
+      }
     }
 
-    if (agent.user_id !== user.id) {
-      return { success: false, error: "You don't have permission to edit this agent" }
+    // Check for active dependencies that would be orphaned
+    const { data: activeDependencies, error: depError } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .eq("agent_id", agentId)
+      .eq("is_dependency", true)
+      .in("status", ["pending", "in_progress"])
+
+    if (depError) {
+      console.error(`[deleteAgent] Error checking dependencies:`, depError)
+      return {
+        success: false,
+        message: "Error checking agent dependencies",
+      }
     }
 
-    // Update agent
-    const { error: updateError } = await supabase
+    if (activeDependencies && activeDependencies.length > 0) {
+      return {
+        success: false,
+        message: `Cannot delete agent with ${activeDependencies.length} active dependencies. Complete or reassign them first.`,
+      }
+    }
+
+    // Start deletion process
+    console.log(`[deleteAgent] Proceeding with deletion of agent "${agent.name}"`)
+
+    // 1. Delete or update child agents that reference this agent as parent
+    const { error: childAgentsError } = await supabase
       .from("agents")
+      .update({ parent_agent_id: null })
+      .eq("parent_agent_id", agentId)
+
+    if (childAgentsError) {
+      console.warn(`[deleteAgent] Warning: Could not update child agents:`, childAgentsError)
+    }
+
+    // 2. Handle tasks - mark dependency tasks as orphaned, delete regular tasks
+    const { error: orphanTasksError } = await supabase
+      .from("tasks")
       .update({
-        name: validatedData.name,
-        description: validatedData.description || null,
-        goal: validatedData.goal,
-        updated_at: new Date().toISOString(),
+        status: "orphaned",
+        metadata: {
+          orphaned_at: new Date().toISOString(),
+          original_agent_id: agentId,
+          orphaned_reason: "Agent deleted",
+        },
       })
-      .eq("id", agentId)
+      .eq("agent_id", agentId)
+      .eq("is_dependency", true)
 
-    if (updateError) {
-      console.error("Error updating agent:", updateError)
-      return { success: false, error: "Failed to update agent" }
+    if (orphanTasksError) {
+      console.warn(`[deleteAgent] Warning: Could not orphan dependency tasks:`, orphanTasksError)
     }
 
-    // Revalidate paths
+    // Delete non-dependency tasks
+    const { error: deleteTasksError } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("agent_id", agentId)
+      .eq("is_dependency", false)
+
+    if (deleteTasksError) {
+      console.warn(`[deleteAgent] Warning: Could not delete regular tasks:`, deleteTasksError)
+    }
+
+    // 3. Delete agent logs
+    const { error: logsError } = await supabase.from("agent_logs").delete().eq("agent_id", agentId)
+
+    if (logsError) {
+      console.warn(`[deleteAgent] Warning: Could not delete agent logs:`, logsError)
+    }
+
+    // 4. Delete notifications related to this agent
+    const { error: notificationsError } = await supabase
+      .from("notifications")
+      .delete()
+      .or(`agent_id.eq.${agentId},metadata->>agent_id.eq.${agentId}`)
+
+    if (notificationsError) {
+      console.warn(`[deleteAgent] Warning: Could not delete notifications:`, notificationsError)
+    }
+
+    // 5. Finally, delete the agent itself
+    const { error: deleteAgentError } = await supabase.from("agents").delete().eq("id", agentId).eq("owner_id", userId)
+
+    if (deleteAgentError) {
+      console.error(`[deleteAgent] Failed to delete agent:`, deleteAgentError)
+      return {
+        success: false,
+        message: "Failed to delete agent. Please try again.",
+      }
+    }
+
+    console.log(`[deleteAgent] Successfully deleted agent "${agent.name}" (${agentId})`)
+
+    // Revalidate relevant pages
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/agents")
+    revalidatePath("/dashboard/agents/manage")
     revalidatePath(`/dashboard/agents/${agentId}`)
-    revalidatePath(`/dashboard/agents/manage`)
-    revalidatePath(`/dashboard`)
 
-    return { success: true }
-  } catch (error) {
-    console.error("Error in updateAgent:", error)
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message }
+    return {
+      success: true,
+      message: `Agent "${agent.name}" has been successfully deleted.`,
+      agentId,
     }
-    return { success: false, error: "An unexpected error occurred" }
+  } catch (error) {
+    console.error("[deleteAgent] Unexpected error:", error)
+    return {
+      success: false,
+      message: "An unexpected error occurred while deleting the agent.",
+    }
   }
 }
