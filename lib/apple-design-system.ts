@@ -1,58 +1,58 @@
-// Apple Design System 2025 - Precision Implementation
+// Apple Design System 2025 - Complete Implementation
 export const AppleDesign = {
-  // Color System - Directly from Apple's color palette
+  // Color System
   colors: {
     // Primary Brand Colors
     blue: {
-      50: "#F0F7FF",
-      100: "#E0F2FE",
-      200: "#BAE6FD",
-      300: "#7DD3FC",
-      400: "#38BDF8",
-      500: "#0284C7", // Apple's signature blue
-      600: "#0369A1",
-      700: "#075985",
-      800: "#0C4A6E",
-      900: "#082F49",
+      50: "#f0f9ff",
+      100: "#e0f2fe",
+      200: "#bae6fd",
+      300: "#7dd3fc",
+      400: "#38bdf8",
+      500: "#0ea5e9", // Primary blue
+      600: "#0284c7",
+      700: "#0369a1",
+      800: "#075985",
+      900: "#0c4a6e",
     },
 
     // Neutral Grays (Apple's signature)
     gray: {
-      50: "#F9FAFB",
-      100: "#F2F2F7", // Apple's light background
-      200: "#E5E5EA", // Light borders
-      300: "#D1D1D6", // Medium borders
-      400: "#C7C7CC", // Disabled text
-      500: "#8E8E93", // Secondary text
-      600: "#6C6C70", // Primary text (light mode)
-      700: "#3A3A3C", // Strong text
-      800: "#2C2C2E", // Very strong text
-      900: "#1C1C1E", // Apple's dark text
+      50: "#fafafa",
+      100: "#f5f5f7", // Apple's light background
+      200: "#e5e5ea", // Light borders
+      300: "#d2d2d7", // Medium borders
+      400: "#aeaeb2", // Disabled text
+      500: "#8e8e93", // Secondary text
+      600: "#636366", // Primary text (light mode)
+      700: "#48484a", // Strong text
+      800: "#3a3a3c", // Very strong text
+      900: "#1d1d1f", // Apple's dark text
     },
 
-    // Semantic Colors - Directly from Apple's UI
-    success: "#34C759", // Apple's green
-    warning: "#FF9500", // Apple's orange
-    error: "#FF3B30", // Apple's red
-    info: "#007AFF", // Apple's blue
+    // Semantic Colors
+    success: "#30d158",
+    warning: "#ff9f0a",
+    error: "#ff453a",
+    info: "#64d2ff",
 
     // Background Colors
     background: {
-      primary: "#FFFFFF",
-      secondary: "#F2F2F7",
-      tertiary: "#FFFFFF",
-      elevated: "#FFFFFF",
+      primary: "#ffffff",
+      secondary: "#f5f5f7",
+      tertiary: "#ffffff",
+      elevated: "#ffffff",
     },
 
     // Glass Effect Colors
     glass: {
-      light: "rgba(255, 255, 255, 0.72)",
+      light: "rgba(255, 255, 255, 0.8)",
       medium: "rgba(255, 255, 255, 0.6)",
-      dark: "rgba(0, 0, 0, 0.05)",
+      dark: "rgba(0, 0, 0, 0.1)",
     },
   },
 
-  // Typography System - Precisely matching Apple's SF Pro
+  // Typography System
   typography: {
     fontFamily: {
       display: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
@@ -60,124 +60,122 @@ export const AppleDesign = {
       mono: '"SF Mono", ui-monospace, monospace',
     },
 
-    // Apple's exact font sizes
     fontSize: {
       xs: "0.75rem", // 12px
-      sm: "0.8125rem", // 13px - Apple often uses 13px
-      base: "0.9375rem", // 15px - Apple's base text size
-      lg: "1.0625rem", // 17px - Apple's large text
-      xl: "1.1875rem", // 19px
-      "2xl": "1.3125rem", // 21px
-      "3xl": "1.5rem", // 24px
-      "4xl": "1.9375rem", // 31px
-      "5xl": "2.5rem", // 40px
-      "6xl": "3rem", // 48px
+      sm: "0.875rem", // 14px
+      base: "1rem", // 16px
+      lg: "1.125rem", // 18px
+      xl: "1.25rem", // 20px
+      "2xl": "1.5rem", // 24px
+      "3xl": "1.875rem", // 30px
+      "4xl": "2.25rem", // 36px
+      "5xl": "3rem", // 48px
+      "6xl": "3.75rem", // 60px
     },
 
-    // Apple's font weights
     fontWeight: {
       light: 300,
-      regular: 400,
-      medium: 500, // Apple uses this a lot
-      semibold: 600, // Apple uses this for buttons
+      normal: 400,
+      medium: 500,
+      semibold: 600,
       bold: 700,
       heavy: 800,
     },
 
-    // Apple's line heights
     lineHeight: {
-      tight: 1.2, // Headings
-      snug: 1.33, // Apple often uses this ratio
-      normal: 1.4, // Apple's standard line height
-      relaxed: 1.5,
-      loose: 1.7,
-    },
-
-    // Apple's letter spacing
-    letterSpacing: {
-      tighter: "-0.02em", // Apple often uses negative tracking for headings
-      tight: "-0.01em",
-      normal: "0em",
-      wide: "0.01em",
-      wider: "0.02em",
+      tight: 1.2,
+      snug: 1.375,
+      normal: 1.5,
+      relaxed: 1.625,
+      loose: 2,
     },
   },
 
-  // Spacing System - Apple's 8px grid with specific adjustments
+  // Spacing System (8px grid)
   spacing: {
     px: "1px",
     0: "0",
     0.5: "0.125rem", // 2px
     1: "0.25rem", // 4px
     1.5: "0.375rem", // 6px
-    2: "0.5rem", // 8px - Apple's base spacing unit
+    2: "0.5rem", // 8px
+    2.5: "0.625rem", // 10px
     3: "0.75rem", // 12px
-    4: "1rem", // 16px - Apple's standard padding
+    3.5: "0.875rem", // 14px
+    4: "1rem", // 16px
     5: "1.25rem", // 20px
-    6: "1.5rem", // 24px - Apple's large padding
+    6: "1.5rem", // 24px
+    7: "1.75rem", // 28px
     8: "2rem", // 32px
+    9: "2.25rem", // 36px
     10: "2.5rem", // 40px
+    11: "2.75rem", // 44px
     12: "3rem", // 48px
+    14: "3.5rem", // 56px
     16: "4rem", // 64px
     20: "5rem", // 80px
     24: "6rem", // 96px
+    28: "7rem", // 112px
+    32: "8rem", // 128px
   },
 
-  // Border Radius - Apple's precise radii
+  // Border Radius
   borderRadius: {
     none: "0",
-    xs: "0.1875rem", // 3px
-    sm: "0.375rem", // 6px
-    md: "0.5rem", // 8px - Apple's standard radius
-    lg: "0.75rem", // 12px - Apple's large radius
-    xl: "1rem", // 16px - Apple's extra large radius
-    "2xl": "1.25rem", // 20px
-    "3xl": "1.5rem", // 24px
+    sm: "0.25rem", // 4px
+    DEFAULT: "0.5rem", // 8px
+    md: "0.75rem", // 12px
+    lg: "1rem", // 16px
+    xl: "1.25rem", // 20px
+    "2xl": "1.5rem", // 24px
+    "3xl": "1.75rem", // 28px
     full: "9999px",
 
     // Apple specific
-    button: "0.5rem", // 8px - Apple's button radius
-    card: "0.75rem", // 12px - Apple's card radius
-    modal: "1rem", // 16px - Apple's modal radius
+    button: "0.75rem",
+    card: "1rem",
+    modal: "1.25rem",
   },
 
-  // Shadows - Apple's signature depth
+  // Shadows (Apple's signature depth)
   shadows: {
-    xs: "0 1px 2px rgba(0, 0, 0, 0.05)",
-    sm: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-    xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    xs: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+    sm: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+    DEFAULT: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+    md: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+    lg: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    xl: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
 
     // Apple specific shadows
-    card: "0 2px 12px rgba(0, 0, 0, 0.08)", // Apple's card shadow
-    button: "0 1px 2px rgba(0, 0, 0, 0.08)", // Apple's button shadow
-    elevated: "0 8px 16px rgba(0, 0, 0, 0.12)", // Apple's elevated element shadow
-    focus: "0 0 0 4px rgba(0, 125, 250, 0.2)", // Apple's focus ring
+    card: "0 2px 16px rgba(0, 0, 0, 0.12)",
+    button: "0 1px 3px rgba(0, 0, 0, 0.12)",
+    modal: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+    focus: "0 0 0 4px rgba(14, 165, 233, 0.15)",
   },
 
-  // Animation & Transitions - Apple's precise timing functions
+  // Animation & Transitions
   animation: {
     duration: {
-      fastest: "100ms",
-      fast: "200ms", // Apple's quick animations
-      normal: "300ms", // Apple's standard animations
-      slow: "400ms",
-      slowest: "500ms",
+      fast: "150ms",
+      normal: "250ms",
+      slow: "350ms",
     },
 
     easing: {
-      // Apple's precise easing functions
-      standard: "cubic-bezier(0.25, 0.1, 0.25, 1.0)", // Apple's standard easing
-      decelerate: "cubic-bezier(0.0, 0.0, 0.2, 1.0)", // Apple's deceleration curve
-      accelerate: "cubic-bezier(0.4, 0.0, 1, 1)", // Apple's acceleration curve
-      sharp: "cubic-bezier(0.4, 0.0, 0.6, 1)", // Apple's sharp curve
-      spring: "cubic-bezier(0.175, 0.885, 0.32, 1.275)", // Apple's spring effect
+      DEFAULT: "cubic-bezier(0.25, 0.1, 0.25, 1.0)",
+      linear: "linear",
+      in: "cubic-bezier(0.4, 0.0, 1, 1)",
+      out: "cubic-bezier(0.0, 0.0, 0.2, 1)",
+      inOut: "cubic-bezier(0.4, 0.0, 0.2, 1)",
+
+      // Apple's signature easing
+      spring: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+      bounce: "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
     },
   },
 } as const
 
-// Component Variants - Precisely matching Apple's UI components
+// Component Variants
 export const componentVariants = {
   button: {
     primary: {
@@ -186,10 +184,6 @@ export const componentVariants = {
       hover: AppleDesign.colors.blue[600],
       active: AppleDesign.colors.blue[700],
       shadow: AppleDesign.shadows.button,
-      borderRadius: AppleDesign.borderRadius.button,
-      padding: `${AppleDesign.spacing[2]} ${AppleDesign.spacing[4]}`,
-      fontSize: AppleDesign.typography.fontSize.base,
-      fontWeight: AppleDesign.typography.fontWeight.semibold,
     },
     secondary: {
       background: AppleDesign.colors.gray[100],
@@ -197,20 +191,12 @@ export const componentVariants = {
       hover: AppleDesign.colors.gray[200],
       active: AppleDesign.colors.gray[300],
       shadow: AppleDesign.shadows.button,
-      borderRadius: AppleDesign.borderRadius.button,
-      padding: `${AppleDesign.spacing[2]} ${AppleDesign.spacing[4]}`,
-      fontSize: AppleDesign.typography.fontSize.base,
-      fontWeight: AppleDesign.typography.fontWeight.medium,
     },
     ghost: {
       background: "transparent",
       color: AppleDesign.colors.gray[600],
       hover: AppleDesign.colors.gray[100],
       active: AppleDesign.colors.gray[200],
-      borderRadius: AppleDesign.borderRadius.button,
-      padding: `${AppleDesign.spacing[2]} ${AppleDesign.spacing[4]}`,
-      fontSize: AppleDesign.typography.fontSize.base,
-      fontWeight: AppleDesign.typography.fontWeight.medium,
     },
   },
 
@@ -220,35 +206,11 @@ export const componentVariants = {
       shadow: AppleDesign.shadows.card,
       border: `1px solid ${AppleDesign.colors.gray[200]}`,
       borderRadius: AppleDesign.borderRadius.card,
-      padding: AppleDesign.spacing[6],
     },
     flat: {
       background: AppleDesign.colors.background.secondary,
       border: `1px solid ${AppleDesign.colors.gray[200]}`,
       borderRadius: AppleDesign.borderRadius.card,
-      padding: AppleDesign.spacing[6],
-    },
-    glass: {
-      background: AppleDesign.colors.glass.light,
-      backdropFilter: "blur(20px)",
-      border: `1px solid ${AppleDesign.colors.gray[200]}`,
-      borderRadius: AppleDesign.borderRadius.card,
-      padding: AppleDesign.spacing[6],
-    },
-  },
-
-  input: {
-    default: {
-      background: AppleDesign.colors.background.primary,
-      border: `1px solid ${AppleDesign.colors.gray[300]}`,
-      borderRadius: AppleDesign.borderRadius.md,
-      padding: `${AppleDesign.spacing[2]} ${AppleDesign.spacing[3]}`,
-      fontSize: AppleDesign.typography.fontSize.base,
-      shadow: AppleDesign.shadows.xs,
-      focus: {
-        border: `1px solid ${AppleDesign.colors.blue[500]}`,
-        shadow: AppleDesign.shadows.focus,
-      },
     },
   },
 }
