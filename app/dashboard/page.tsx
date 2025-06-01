@@ -1,9 +1,8 @@
 import { getSupabaseFromServer } from "@/lib/supabase/server"
-import AppleLayout from "@/components/apple-layout"
-import AppleCard from "@/components/apple-card"
-import AppleButton from "@/components/apple-button"
-import { PlusIcon, BrainIcon, TargetIcon, TrendingUpIcon, CheckCircleIcon } from "lucide-react"
+import { redirect } from "next/navigation"
 import Link from "next/link"
+import AppleLayout from "@/components/apple-layout"
+import { BrainIcon, CheckCircleIcon, TargetIcon, TrendingUpIcon, PlusIcon, ArrowRightIcon } from "lucide-react"
 
 export default async function DashboardPage() {
   const supabase = getSupabaseFromServer()
@@ -13,252 +12,292 @@ export default async function DashboardPage() {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Mock data for demonstration
-  const stats = [
-    { label: "Active Agents", value: "12", change: "+2", trend: "up", icon: BrainIcon },
-    { label: "Completed Tasks", value: "847", change: "+23", trend: "up", icon: CheckCircleIcon },
-    { label: "Dependencies", value: "3", change: "-1", trend: "down", icon: TargetIcon },
-    { label: "Success Rate", value: "94%", change: "+2%", trend: "up", icon: TrendingUpIcon },
-  ]
+  if (!session) {
+    redirect("/login")
+  }
 
-  const recentAgents = [
-    { id: 1, name: "Customer Support Agent", status: "active", lastActive: "2 minutes ago" },
-    { id: 2, name: "Sales Lead Generator", status: "working", lastActive: "5 minutes ago" },
-    { id: 3, name: "Content Creator", status: "paused", lastActive: "1 hour ago" },
-  ]
+  // Fetch agents
+  const { data: agents } = await supabase.from("agents").select("*").order("created_at", { ascending: false }).limit(3)
 
-  const recentTasks = [
-    {
-      id: 1,
-      title: "Process customer inquiries",
-      agent: "Customer Support Agent",
-      status: "completed",
-      priority: "high",
-    },
-    { id: 2, title: "Generate sales leads", agent: "Sales Lead Generator", status: "in_progress", priority: "medium" },
-    { id: 3, title: "Create blog content", agent: "Content Creator", status: "pending", priority: "low" },
-  ]
+  // Fetch tasks
+  const { data: tasks } = await supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(3)
 
-  const user = session?.user
-    ? {
-        name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "User",
-        email: session.user.email || "user@example.com",
-      }
-    : {
-        name: "Demo User",
-        email: "demo@agentflow.com",
-      }
+  // User data
+  const user = {
+    name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "User",
+    email: session.user.email || "user@example.com",
+  }
 
   return (
     <AppleLayout user={user}>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back, {user.name}! Here's what's happening with your agents.</p>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-500">Here's what's happening with your agents</p>
           </div>
-          <AppleButton variant="primary" size="lg" icon={<PlusIcon className="w-5 h-5" />}>
-            <Link href="/dashboard/agents/new">Create Agent</Link>
-          </AppleButton>
+          <Link
+            href="/dashboard/agents/new"
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            <PlusIcon className="-ml-0.5 mr-1.5 h-4 w-4" />
+            Create Agent
+          </Link>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
-            <AppleCard key={stat.label} variant="elevated" hover>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                  <div className="flex items-center mt-2">
-                    <span className={`text-sm font-medium ${stat.trend === "up" ? "text-green-600" : "text-red-600"}`}>
-                      {stat.change}
-                    </span>
-                    <span className="text-sm text-gray-500 ml-1">from last week</span>
-                  </div>
+        {/* Stats */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Active Agents */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <BrainIcon className="h-6 w-6 text-blue-600" aria-hidden="true" />
                 </div>
-                <div className={`p-3 rounded-lg ${stat.trend === "up" ? "bg-green-100" : "bg-red-100"}`}>
-                  <stat.icon className={`w-6 h-6 ${stat.trend === "up" ? "text-green-600" : "text-red-600"}`} />
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Agents</dt>
+                    <dd>
+                      <div className="text-3xl font-semibold text-gray-900">12</div>
+                    </dd>
+                  </dl>
                 </div>
               </div>
-            </AppleCard>
-          ))}
+              <div className="mt-4 flex items-center text-sm">
+                <span className="text-green-600 font-medium">+2</span>
+                <span className="ml-1 text-gray-500">from last week</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Completed Tasks */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <CheckCircleIcon className="h-6 w-6 text-green-600" aria-hidden="true" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Completed Tasks</dt>
+                    <dd>
+                      <div className="text-3xl font-semibold text-gray-900">847</div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center text-sm">
+                <span className="text-green-600 font-medium">+23</span>
+                <span className="ml-1 text-gray-500">from last week</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dependencies */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <TargetIcon className="h-6 w-6 text-orange-600" aria-hidden="true" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Dependencies</dt>
+                    <dd>
+                      <div className="text-3xl font-semibold text-gray-900">3</div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center text-sm">
+                <span className="text-red-600 font-medium">-1</span>
+                <span className="ml-1 text-gray-500">from last week</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Success Rate */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <TrendingUpIcon className="h-6 w-6 text-blue-600" aria-hidden="true" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Success Rate</dt>
+                    <dd>
+                      <div className="text-3xl font-semibold text-gray-900">94%</div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center text-sm">
+                <span className="text-green-600 font-medium">+2%</span>
+                <span className="ml-1 text-gray-500">from last week</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Agents and Tasks */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Recent Agents */}
-          <AppleCard variant="elevated">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Recent Agents</h2>
-              <Link href="/dashboard/agents" className="text-blue-600 hover:text-blue-500 text-sm font-medium">
-                View all
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {recentAgents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-medium text-gray-900">Recent Agents</h2>
+                <Link href="/dashboard/agents" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+                  View all
+                </Link>
+              </div>
+              <div className="mt-6 flow-root">
+                <ul className="divide-y divide-gray-200">
+                  {agents && agents.length > 0 ? (
+                    agents.map((agent) => (
+                      <li key={agent.id} className="py-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <BrainIcon className="h-4 w-4 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-gray-900">{agent.name}</p>
+                            <p className="truncate text-sm text-gray-500">{agent.goal}</p>
+                          </div>
+                          <div>
+                            <Link
+                              href={`/dashboard/agents/${agent.id}`}
+                              className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-sm font-medium leading-5 text-gray-700 shadow-sm hover:bg-gray-50"
+                            >
+                              View
+                            </Link>
+                          </div>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="py-4 text-center text-sm text-gray-500">No agents found</li>
+                  )}
+                </ul>
+              </div>
+              <div className="mt-6">
+                <Link
+                  href="/dashboard/agents/new"
+                  className="flex w-full items-center justify-center rounded-md bg-white px-3 py-2 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-3 h-3 rounded-full ${
-                        agent.status === "active"
-                          ? "bg-green-500"
-                          : agent.status === "working"
-                            ? "bg-blue-500"
-                            : "bg-gray-400"
-                      }`}
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">{agent.name}</p>
-                      <p className="text-sm text-gray-500">{agent.lastActive}</p>
-                    </div>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      agent.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : agent.status === "working"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-gray-100 text-gray-800"
-                    }`}
-                  >
-                    {agent.status}
-                  </span>
-                </div>
-              ))}
+                  Create New Agent
+                </Link>
+              </div>
             </div>
-          </AppleCard>
+          </div>
 
           {/* Recent Tasks */}
-          <AppleCard variant="elevated">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Recent Tasks</h2>
-              <Link href="/dashboard/dependencies" className="text-blue-600 hover:text-blue-500 text-sm font-medium">
-                View all
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {recentTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-medium text-gray-900">Recent Tasks</h2>
+                <Link href="/dashboard/tasks" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+                  View all
+                </Link>
+              </div>
+              <div className="mt-6 flow-root">
+                <ul className="divide-y divide-gray-200">
+                  {tasks && tasks.length > 0 ? (
+                    tasks.map((task) => (
+                      <li key={task.id} className="py-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-shrink-0">
+                            <div
+                              className={`h-8 w-8 rounded-full flex items-center justify-center
+                                ${task.priority === "high" ? "bg-red-100" : task.priority === "medium" ? "bg-yellow-100" : "bg-green-100"}
+                              `}
+                            >
+                              <TargetIcon
+                                className={`h-4 w-4 
+                                  ${task.priority === "high" ? "text-red-600" : task.priority === "medium" ? "text-yellow-600" : "text-green-600"}
+                                `}
+                              />
+                            </div>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-gray-900">{task.title}</p>
+                            <p className="truncate text-sm text-gray-500">
+                              {task.status === "completed"
+                                ? "Completed"
+                                : task.status === "in_progress"
+                                  ? "In Progress"
+                                  : "Pending"}
+                            </p>
+                          </div>
+                          <div>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                                ${
+                                  task.status === "completed"
+                                    ? "bg-green-100 text-green-800"
+                                    : task.status === "in_progress"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-gray-100 text-gray-800"
+                                }
+                              `}
+                            >
+                              {task.priority}
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="py-4 text-center text-sm text-gray-500">No tasks found</li>
+                  )}
+                </ul>
+              </div>
+              <div className="mt-6">
+                <Link
+                  href="/dashboard/tasks/new"
+                  className="flex w-full items-center justify-center rounded-md bg-white px-3 py-2 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{task.title}</p>
-                      <p className="text-sm text-gray-500 mt-1">{task.agent}</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          task.priority === "high"
-                            ? "bg-red-100 text-red-800"
-                            : task.priority === "medium"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {task.priority}
-                      </span>
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          task.status === "completed"
-                            ? "bg-green-100 text-green-800"
-                            : task.status === "in_progress"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {task.status.replace("_", " ")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  Create New Task
+                </Link>
+              </div>
             </div>
-          </AppleCard>
+          </div>
         </div>
 
         {/* Quick Actions */}
-        <AppleCard variant="glass">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <BrainIcon className="w-5 h-5" />
-              Create New Agent
-            </AppleButton>
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <TargetIcon className="w-5 h-5" />
-              Review Dependencies
-            </AppleButton>
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <TrendingUpIcon className="w-5 h-5" />
-              View Analytics
-            </AppleButton>
-          </div>
-        </AppleCard>
-
-        {/* Dynamic Island */}
-        <div className="fixed bottom-0 right-0 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Status</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">Active</p>
-            </div>
-            <div className="p-3 rounded-lg bg-green-100">
-              <BrainIcon className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        {/* Control Center */}
-        <div className="fixed bottom-0 left-0 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Control Center</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <BrainIcon className="w-5 h-5" />
-              Create New Agent
-            </AppleButton>
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <TargetIcon className="w-5 h-5" />
-              Review Dependencies
-            </AppleButton>
-            <AppleButton variant="secondary" size="lg" className="justify-start">
-              <TrendingUpIcon className="w-5 h-5" />
-              View Analytics
-            </AppleButton>
-          </div>
-        </div>
-
-        {/* Notification Center */}
-        <div className="fixed top-0 right-0 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Notifications</h2>
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
-              <p className="font-medium text-gray-900">New Task Assigned</p>
-              <p className="text-sm text-gray-500 mt-1">Process customer inquiries</p>
-            </div>
-            <div className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
-              <p className="font-medium text-gray-900">Agent Status Update</p>
-              <p className="text-sm text-gray-500 mt-1">Customer Support Agent is now active</p>
+        <div className="overflow-hidden rounded-lg bg-white shadow">
+          <div className="p-6">
+            <h2 className="text-base font-medium text-gray-900">Quick Actions</h2>
+            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Link
+                href="/dashboard/agents/new"
+                className="flex items-center rounded-md border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <PlusIcon className="mr-3 h-5 w-5 text-gray-400" />
+                Create New Agent
+                <ArrowRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+              </Link>
+              <Link
+                href="/dashboard/dependencies"
+                className="flex items-center rounded-md border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <TargetIcon className="mr-3 h-5 w-5 text-gray-400" />
+                Review Dependencies
+                <ArrowRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+              </Link>
+              <Link
+                href="/dashboard/analytics"
+                className="flex items-center rounded-md border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <TrendingUpIcon className="mr-3 h-5 w-5 text-gray-400" />
+                View Analytics
+                <ArrowRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+              </Link>
             </div>
           </div>
-        </div>
-
-        {/* Spotlight Search */}
-        <div className="fixed top-0 left-0 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Spotlight Search</h2>
-          <input
-            type="text"
-            className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
-            placeholder="Search..."
-          />
         </div>
       </div>
     </AppleLayout>

@@ -2,8 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Apple-inspired base styles */
 @layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
   * {
     @apply border-border;
   }
@@ -35,34 +57,6 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400;
-  }
-}
-
-/* Apple-inspired component styles */
-@layer components {
-  .apple-glass {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-  }
-
-  .apple-shadow {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  }
-
-  .apple-button-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
-    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-  }
-
-  .apple-card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
-    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-  }
-
-  .apple-card:hover {
-    @apply shadow-md;
-    transform: translateY(-1px);
   }
 }
 
@@ -115,28 +109,4 @@
 /* Focus styles */
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
-}
-
-/* Typography improvements */
-.text-balance {
-  text-wrap: balance;
-}
-
-/* Apple-style form elements */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-textarea,
-select {
-  @apply rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
-  transition: all 0.2s ease;
-}
-
-/* Button hover effects */
-button:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-button:not(:disabled):active {
-  transform: translateY(0);
 }

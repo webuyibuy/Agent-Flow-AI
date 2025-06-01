@@ -1,12 +1,13 @@
 "use client"
 
 import type React from "react"
+
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  HomeIcon,
+  LayoutGridIcon,
   BrainIcon,
   TargetIcon,
   BarChart3Icon,
@@ -16,7 +17,7 @@ import {
   SearchIcon,
   MenuIcon,
   XIcon,
-  ChevronRightIcon,
+  UsersIcon,
 } from "lucide-react"
 
 interface NavItem {
@@ -27,11 +28,16 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGridIcon },
   { href: "/dashboard/agents", label: "Agents", icon: BrainIcon },
   { href: "/dashboard/dependencies", label: "Dependencies", icon: TargetIcon, badge: 3 },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3Icon },
   { href: "/dashboard/settings", label: "Settings", icon: SettingsIcon },
+]
+
+const tools: NavItem[] = [
+  { href: "/dashboard/agents/new", label: "Create Agent", icon: PlusIcon },
+  { href: "/dashboard/team", label: "Team Management", icon: UsersIcon },
 ]
 
 interface AppleLayoutProps {
@@ -46,12 +52,13 @@ interface AppleLayoutProps {
 export default function AppleLayout({ children, user }: AppleLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const pathname = usePathname()
 
   // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20)
+      setIsScrolled(window.scrollY > 10)
     }
 
     window.addEventListener("scroll", handleScroll)
@@ -64,225 +71,275 @@ export default function AppleLayout({ children, user }: AppleLayoutProps) {
   }, [pathname])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f5f5f7]">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white/80 backdrop-blur-xl border-r border-gray-200 px-6 pb-4">
-          {/* Logo */}
-          <div className="flex h-16 shrink-0 items-center">
-            <Link href="/dashboard" className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <BrainIcon className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-semibold text-gray-900">AgentFlow</span>
-            </Link>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex flex-1 flex-col">
-            <ul role="list" className="flex flex-1 flex-col gap-y-1">
-              {navigation.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-                return (
-                  <li key={item.label}>
-                    <Link
-                      href={item.href}
-                      className={`
-                        group flex gap-x-3 rounded-lg p-3 text-sm font-medium leading-6 transition-all duration-200
-                        ${
-                          isActive
-                            ? "bg-blue-50 text-blue-700 shadow-sm"
-                            : "text-gray-700 hover:text-blue-700 hover:bg-gray-50"
-                        }
-                      `}
-                    >
-                      <item.icon
-                        className={`h-5 w-5 shrink-0 ${isActive ? "text-blue-700" : "text-gray-400 group-hover:text-blue-700"}`}
-                      />
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge && (
-                        <span className="ml-auto w-5 h-5 text-xs bg-blue-600 text-white rounded-full flex items-center justify-center">
-                          {item.badge}
-                        </span>
-                      )}
-                      <ChevronRightIcon
-                        className={`h-4 w-4 transition-transform ${isActive ? "text-blue-700" : "text-gray-300 group-hover:text-blue-700"}`}
-                      />
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-
-            {/* Create Agent Button */}
-            <div className="mt-auto">
-              <Link
-                href="/dashboard/agents/new"
-                className="group flex w-full items-center gap-x-3 rounded-lg bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors duration-200"
-              >
-                <PlusIcon className="h-5 w-5" />
-                Create Agent
-              </Link>
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:overflow-y-auto lg:border-r lg:border-gray-200 lg:bg-white lg:pb-4">
+        <div className="flex h-16 items-center justify-center border-b border-gray-200">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+              <BrainIcon className="h-5 w-5 text-white" />
             </div>
-
-            {/* User Profile */}
-            {user && (
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center gap-x-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </nav>
+            <span className="text-lg font-semibold text-gray-900">AgentFlow</span>
+          </Link>
         </div>
+        <nav className="mt-5 px-2">
+          <div className="space-y-1">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`
+                    group flex items-center rounded-md px-3 py-2 text-sm font-medium
+                    ${isActive ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"}
+                  `}
+                >
+                  <item.icon
+                    className={`mr-3 h-5 w-5 flex-shrink-0 ${isActive ? "text-blue-600" : "text-gray-400 group-hover:text-gray-500"}`}
+                  />
+                  <span className="truncate">{item.label}</span>
+                  {item.badge && (
+                    <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-600">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+          <div className="mt-8">
+            <h3 className="px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Business Tools</h3>
+            <div className="mt-2 space-y-1">
+              {tools.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="group flex items-center rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                >
+                  <item.icon className="mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-500" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </nav>
+        {user && (
+          <div className="mt-auto border-t border-gray-200 pt-4 px-3">
+            <div className="flex items-center gap-3 px-2 py-3">
+              <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                <span className="text-sm font-medium text-white">{user.name.charAt(0).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                <p className="text-xs text-gray-500">{user.email}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Mobile menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
               onClick={() => setIsMobileMenuOpen(false)}
             />
-
-            {/* Menu Panel */}
             <motion.div
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 z-50 w-72 bg-white/95 backdrop-blur-xl border-r border-gray-200 lg:hidden"
+              initial={{ translateX: "-100%" }}
+              animate={{ translateX: 0 }}
+              exit={{ translateX: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto bg-white pb-12 lg:hidden"
             >
-              <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
-                <Link href="/dashboard" className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                    <BrainIcon className="w-5 h-5 text-white" />
+              <div className="flex items-center justify-between px-4 pt-5 pb-2">
+                <Link href="/dashboard" className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                    <BrainIcon className="h-5 w-5 text-white" />
                   </div>
-                  <span className="text-xl font-semibold text-gray-900">AgentFlow</span>
+                  <span className="text-lg font-semibold text-gray-900">AgentFlow</span>
                 </Link>
                 <button
+                  type="button"
+                  className="-mr-2 inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                 >
-                  <XIcon className="h-5 w-5" />
+                  <XIcon className="h-6 w-6" aria-hidden="true" />
                 </button>
               </div>
-
-              <nav className="flex-1 px-6 py-6">
-                <ul className="space-y-1">
+              <nav className="mt-5 px-2">
+                <div className="space-y-1">
                   {navigation.map((item) => {
                     const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
                     return (
-                      <li key={item.label}>
-                        <Link
-                          href={item.href}
-                          className={`
-                            group flex gap-x-3 rounded-lg p-3 text-sm font-medium leading-6 transition-all duration-200
-                            ${
-                              isActive
-                                ? "bg-blue-50 text-blue-700 shadow-sm"
-                                : "text-gray-700 hover:text-blue-700 hover:bg-gray-50"
-                            }
-                          `}
-                        >
-                          <item.icon
-                            className={`h-5 w-5 shrink-0 ${isActive ? "text-blue-700" : "text-gray-400 group-hover:text-blue-700"}`}
-                          />
-                          <span className="flex-1">{item.label}</span>
-                          {item.badge && (
-                            <span className="ml-auto w-5 h-5 text-xs bg-blue-600 text-white rounded-full flex items-center justify-center">
-                              {item.badge}
-                            </span>
-                          )}
-                        </Link>
-                      </li>
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        className={`
+                          group flex items-center rounded-md px-3 py-2 text-sm font-medium
+                          ${
+                            isActive ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          }
+                        `}
+                      >
+                        <item.icon
+                          className={`mr-3 h-5 w-5 flex-shrink-0 ${isActive ? "text-blue-600" : "text-gray-400 group-hover:text-gray-500"}`}
+                        />
+                        <span className="truncate">{item.label}</span>
+                        {item.badge && (
+                          <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-600">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
                     )
                   })}
-                </ul>
+                </div>
+                <div className="mt-8">
+                  <h3 className="px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Business Tools</h3>
+                  <div className="mt-2 space-y-1">
+                    {tools.map((item) => (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        className="group flex items-center rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        <item.icon className="mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-500" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               </nav>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <div className="lg:pl-72">
-        {/* Top Navigation */}
-        <motion.header
-          className={`
-            sticky top-0 z-30 flex h-16 items-center gap-x-4 border-b px-4 sm:gap-x-6 sm:px-6 lg:px-8 transition-all duration-300
-            ${isScrolled ? "bg-white/80 backdrop-blur-xl border-gray-200 shadow-sm" : "bg-white border-gray-200"}
-          `}
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.3 }}
+      {/* Main content */}
+      <div className="lg:pl-64">
+        {/* Top header */}
+        <header
+          className={`sticky top-0 z-10 flex h-16 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 ${
+            isScrolled ? "shadow-md" : ""
+          }`}
         >
-          {/* Mobile menu button */}
           <button
             type="button"
-            className="p-2.5 text-gray-700 lg:hidden rounded-lg hover:bg-gray-100 transition-colors"
+            className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
             onClick={() => setIsMobileMenuOpen(true)}
           >
-            <MenuIcon className="h-5 w-5" />
+            <MenuIcon className="h-6 w-6" aria-hidden="true" />
           </button>
 
-          {/* Search */}
+          {/* Logo for mobile */}
+          <div className="flex lg:hidden">
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                <BrainIcon className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-lg font-semibold text-gray-900">AgentFlow</span>
+            </Link>
+          </div>
+
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="relative flex flex-1 max-w-md">
-              <SearchIcon className="pointer-events-none absolute inset-y-0 left-0 h-full w-5 text-gray-400 pl-3" />
+            <div className="relative flex flex-1 items-center">
+              <SearchIcon className="pointer-events-none absolute left-4 h-5 w-5 text-gray-400" aria-hidden="true" />
               <input
-                className="block h-full w-full border-0 py-0 pl-10 pr-0 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm bg-transparent"
-                placeholder="Search agents, tasks..."
                 type="search"
+                name="search"
+                id="search"
+                placeholder="Search agents, tasks..."
+                className="h-10 block w-full rounded-full border-0 bg-gray-50 py-1.5 pl-12 pr-4 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm"
               />
             </div>
           </div>
 
-          {/* Right side */}
           <div className="flex items-center gap-x-4 lg:gap-x-6">
             {/* Notifications */}
-            <button className="relative p-2.5 text-gray-400 hover:text-gray-500 rounded-lg hover:bg-gray-100 transition-colors">
-              <BellIcon className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
-                3
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className="-m-1.5 flex items-center justify-center p-1.5 text-gray-400 hover:text-gray-500"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              >
+                <BellIcon className="h-6 w-6" aria-hidden="true" />
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white">
+                  2
+                </span>
+              </button>
 
-            {/* User menu */}
-            {user && (
-              <div className="hidden lg:block">
-                <div className="flex items-center gap-x-3">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                </div>
+              {/* Notifications dropdown */}
+              <AnimatePresence>
+                {isNotificationsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 z-10 mt-2 w-80 origin-top-right rounded-lg bg-white py-2 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                  >
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      <div className="px-4 py-3 hover:bg-gray-50">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <TargetIcon className="h-4 w-4 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="ml-3 w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900">New Task Assigned</p>
+                            <p className="mt-1 text-sm text-gray-500">Process customer inquiries</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="px-4 py-3 hover:bg-gray-50">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                              <BrainIcon className="h-4 w-4 text-green-600" />
+                            </div>
+                          </div>
+                          <div className="ml-3 w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900">Agent Status Update</p>
+                            <p className="mt-1 text-sm text-gray-500">Customer Support Agent is now active</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Profile dropdown */}
+            <div className="relative">
+              <div className="flex items-center gap-x-3">
+                {user && (
+                  <>
+                    <div className="hidden lg:flex lg:items-center lg:gap-x-2">
+                      <span className="text-sm font-medium text-gray-900">{user.name}</span>
+                    </div>
+                    <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                      <span className="text-sm font-medium text-white">{user.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                  </>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        </motion.header>
+        </header>
 
-        {/* Page Content */}
         <main className="py-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="px-4 sm:px-6 lg:px-8"
-          >
-            {children}
-          </motion.div>
+          <div className="px-4 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>
     </div>
