@@ -1,195 +1,345 @@
 "use server"
 
-import { getSupabaseFromServer, getSupabaseAdmin } from "@/lib/supabase/server"
+import { getSupabaseFromServer } from "@/lib/supabase/server"
+import { encrypt, decrypt } from "@/lib/encryption"
 import { revalidatePath } from "next/cache"
-import { prepareApiKeyForStorage, retrieveApiKeyFromStorage } from "@/lib/encryption"
 import { getDefaultUserId } from "@/lib/default-user"
 
-export interface ApiKeyInfo {
-  service_id: string
-  isSet: boolean
-  // We don't return the key value itself to the client for listing
-}
-
-export interface ApiKeyActionResult {
-  success?: boolean
-  error?: string
+export interface ApiKeyState {
   message?: string
-  keys?: ApiKeyInfo[]
-  updatedServiceId?: string
-  isSet?: boolean
+  error?: string
+  success?: boolean
 }
 
-// List of known services the UI can manage
-const KNOWN_SERVICE_IDS = ["openai", "anthropic", "n8n_url", "lyzr_api_key"]
+export interface ApiKeyWithModel {
+  id: string
+  provider: string
+  key_name: string
+  created_at: string
+  preferred_model?: string
+}
 
-/**
- * Fetches the status of API keys for all known services for the current user.
- */
-export async function getApiKeys(): Promise<ApiKeyActionResult> {
+export async function saveApiKey(prevState: ApiKeyState | undefined, formData: FormData): Promise<ApiKeyState> {
+  console.log("🔑 Starting saveApiKey action...")
+
+  const supabase = getSupabaseFromServer()
+
   let userId: string
   try {
     userId = await getDefaultUserId()
+    console.log("✅ Got user ID:", userId)
   } catch (error) {
+    console.error("❌ Authentication error:", error)
     return { error: "Authentication required." }
   }
 
+  const provider = formData.get("provider") as string
+  const keyName = formData.get("keyName") as string
+  const apiKey = formData.get("apiKey") as string
+  const preferredModel = formData.get("preferredModel") as string
+
+  console.log("📝 Form data:", { provider, keyName, preferredModel, apiKeyLength: apiKey?.length })
+
+  if (!provider || !keyName || !apiKey) {
+    return { error: "Provider, key name, and API key are required." }
+  }
+
+  // Validate API key format based on provider
+  if (!validateApiKeyFormat(provider, apiKey)) {
+    return { error: `Invalid API key format for ${provider}. Please check your API key.` }
+  }
+
   try {
-    const supabase = getSupabaseFromServer()
-    const { data: storedKeys, error: dbError } = await supabase
-      .from("user_api_keys")
-      .select("service_id")
+    // Check if a key with the same provider and name already exists
+    const { data: existingKey } = await supabase
+      .from("api_keys")
+      .select("id")
       .eq("user_id", userId)
-
-    if (dbError) {
-      console.error("Error fetching API keys:", dbError)
-      return { error: "Failed to fetch API key statuses." }
-    }
-
-    const keysStatus: ApiKeyInfo[] = KNOWN_SERVICE_IDS.map((serviceId) => ({
-      service_id: serviceId,
-      isSet: storedKeys.some((key) => key.service_id === serviceId),
-    }))
-
-    return { success: true, keys: keysStatus }
-  } catch (e) {
-    console.error("Unexpected error in getApiKeys:", e)
-    return { error: "An unexpected error occurred while fetching API key statuses." }
-  }
-}
-
-/**
- * Saves or updates an API key for a specific service for the current user.
- * Now with proper encryption!
- */
-export async function saveApiKey(serviceId: string, apiKeyValue: string): Promise<ApiKeyActionResult> {
-  const supabase = getSupabaseAdmin()
-  let userId: string
-  try {
-    userId = await getDefaultUserId()
-  } catch (error) {
-    return { error: "Authentication required." }
-  }
-
-  if (!serviceId || !apiKeyValue.trim()) {
-    return { error: "Service ID and API key value are required." }
-  }
-
-  if (!KNOWN_SERVICE_IDS.includes(serviceId)) {
-    return { error: "Invalid service ID." }
-  }
-
-  try {
-    // Encrypt the API key before storing
-    const encryptedApiKey = prepareApiKeyForStorage(apiKeyValue.trim())
-
-    const { error: upsertError } = await supabase.from("user_api_keys").upsert(
-      {
-        user_id: userId,
-        service_id: serviceId,
-        api_key_value: encryptedApiKey, // Now storing encrypted data
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id, service_id" },
-    )
-
-    if (upsertError) {
-      console.error(`Error saving API key for ${serviceId}:`, upsertError)
-      return { error: `Failed to save API key for ${serviceId}. ${upsertError.message}` }
-    }
-
-    revalidatePath("/dashboard/settings/profile")
-    return {
-      success: true,
-      message: `API key for ${serviceId} saved securely.`,
-      updatedServiceId: serviceId,
-      isSet: true,
-    }
-  } catch (e) {
-    console.error("Unexpected error in saveApiKey:", e)
-    return { error: "An unexpected error occurred while saving the API key." }
-  }
-}
-
-/**
- * Removes an API key for a specific service for the current user.
- */
-export async function removeApiKey(serviceId: string): Promise<ApiKeyActionResult> {
-  const supabase = getSupabaseAdmin()
-  let userId: string
-  try {
-    userId = await getDefaultUserId()
-  } catch (error) {
-    return { error: "Authentication required." }
-  }
-
-  if (!serviceId) {
-    return { error: "Service ID is required." }
-  }
-
-  if (!KNOWN_SERVICE_IDS.includes(serviceId)) {
-    return { error: "Invalid service ID." }
-  }
-
-  try {
-    const { error: deleteError } = await supabase
-      .from("user_api_keys")
-      .delete()
-      .eq("user_id", userId)
-      .eq("service_id", serviceId)
-
-    if (deleteError) {
-      console.error(`Error removing API key for ${serviceId}:`, deleteError)
-      return { error: `Failed to remove API key for ${serviceId}. ${deleteError.message}` }
-    }
-
-    revalidatePath("/dashboard/settings/profile")
-    return {
-      success: true,
-      message: `API key for ${serviceId} removed successfully.`,
-      updatedServiceId: serviceId,
-      isSet: false,
-    }
-  } catch (e) {
-    console.error("Unexpected error in removeApiKey:", e)
-    return { error: "An unexpected error occurred while removing the API key." }
-  }
-}
-
-/**
- * Retrieves and decrypts an API key for internal use (server-side only)
- */
-export async function getDecryptedApiKey(serviceId: string, userId?: string): Promise<string | null> {
-  const supabase = getSupabaseAdmin()
-  let effectiveUserId = userId
-
-  if (!effectiveUserId) {
-    try {
-      effectiveUserId = await getDefaultUserId()
-    } catch (error) {
-      console.error("Authentication required to retrieve API key")
-      return null
-    }
-  }
-
-  try {
-    const { data: keyData, error } = await supabase
-      .from("user_api_keys")
-      .select("api_key_value")
-      .eq("user_id", effectiveUserId)
-      .eq("service_id", serviceId)
+      .eq("provider", provider)
+      .eq("key_name", keyName)
       .single()
 
-    if (error || !keyData) {
-      console.log(`No API key found for service ${serviceId}`)
+    if (existingKey) {
+      return { error: `An API key with the name "${keyName}" already exists for ${provider}.` }
+    }
+
+    // Encrypt the API key
+    console.log("🔐 Encrypting API key...")
+    const encryptedKey = encrypt(apiKey)
+    console.log("✅ API key encrypted successfully")
+
+    // Save to database with preferred model
+    console.log("💾 Saving to database...")
+    const insertData = {
+      user_id: userId,
+      provider,
+      key_name: keyName,
+      encrypted_key: encryptedKey,
+      preferred_model: preferredModel || getDefaultModel(provider),
+      created_at: new Date().toISOString(),
+    }
+
+    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED]" })
+
+    const { data, error: insertError } = await supabase.from("api_keys").insert(insertData).select()
+
+    if (insertError) {
+      console.error("❌ Database insert error:", insertError)
+      return { error: `Failed to save API key: ${insertError.message}` }
+    }
+
+    console.log("✅ API key saved successfully:", data)
+    revalidatePath("/dashboard/settings/profile")
+    return {
+      success: true,
+      message: `🎉 API key for ${provider} saved successfully! You can now use ${preferredModel || getDefaultModel(provider)} for AI operations.`,
+    }
+  } catch (error) {
+    console.error("❌ Unexpected error in saveApiKey:", error)
+    return { error: "Failed to save API key. Please try again." }
+  }
+}
+
+function validateApiKeyFormat(provider: string, apiKey: string): boolean {
+  switch (provider.toLowerCase()) {
+    case "openai":
+      return apiKey.startsWith("sk-") && apiKey.length > 20
+    case "anthropic":
+      return apiKey.startsWith("sk-ant-") && apiKey.length > 20
+    case "groq":
+      return apiKey.startsWith("gsk_") && apiKey.length > 20
+    case "xai":
+      return apiKey.startsWith("xai-") && apiKey.length > 20
+    default:
+      return apiKey.length > 10 // Basic length check for unknown providers
+  }
+}
+
+function getDefaultModel(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "openai":
+      return "gpt-4o-mini"
+    case "anthropic":
+      return "claude-3-haiku-20240307"
+    case "groq":
+      return "llama-3.1-8b-instant"
+    case "xai":
+      return "grok-beta"
+    default:
+      return "default"
+  }
+}
+
+export async function updateApiKeyModel(prevState: ApiKeyState | undefined, formData: FormData): Promise<ApiKeyState> {
+  console.log("🔄 Starting updateApiKeyModel action...")
+
+  const supabase = getSupabaseFromServer()
+
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+    console.log("✅ Got user ID:", userId)
+  } catch (error) {
+    console.error("❌ Authentication error:", error)
+    return { error: "Authentication required." }
+  }
+
+  const keyId = formData.get("keyId") as string
+  const preferredModel = formData.get("preferredModel") as string
+
+  console.log("📝 Update data:", { keyId, preferredModel })
+
+  if (!keyId) {
+    return { error: "Key ID is required." }
+  }
+
+  try {
+    const { data, error: updateError } = await supabase
+      .from("api_keys")
+      .update({
+        preferred_model: preferredModel || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", keyId)
+      .eq("user_id", userId)
+      .select()
+
+    if (updateError) {
+      console.error("❌ Database update error:", updateError)
+      return { error: `Failed to update model preference: ${updateError.message}` }
+    }
+
+    if (!data || data.length === 0) {
+      return { error: "API key not found or you don't have permission to update it." }
+    }
+
+    console.log("✅ Model preference updated successfully:", data)
+    revalidatePath("/dashboard/settings/profile")
+    return { success: true, message: `✅ Model preference updated to ${preferredModel}!` }
+  } catch (error) {
+    console.error("❌ Unexpected error in updateApiKeyModel:", error)
+    return { error: "Failed to update model preference. Please try again." }
+  }
+}
+
+export async function deleteApiKey(prevState: ApiKeyState | undefined, formData: FormData): Promise<ApiKeyState> {
+  console.log("🗑️ Starting deleteApiKey action...")
+
+  const supabase = getSupabaseFromServer()
+
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+    console.log("✅ Got user ID:", userId)
+  } catch (error) {
+    console.error("❌ Authentication error:", error)
+    return { error: "Authentication required." }
+  }
+
+  const keyId = formData.get("keyId") as string
+
+  console.log("📝 Delete data:", { keyId })
+
+  if (!keyId) {
+    return { error: "Key ID is required." }
+  }
+
+  try {
+    const { data, error: deleteError } = await supabase
+      .from("api_keys")
+      .delete()
+      .eq("id", keyId)
+      .eq("user_id", userId)
+      .select()
+
+    if (deleteError) {
+      console.error("❌ Database delete error:", deleteError)
+      return { error: `Failed to delete API key: ${deleteError.message}` }
+    }
+
+    if (!data || data.length === 0) {
+      return { error: "API key not found or you don't have permission to delete it." }
+    }
+
+    console.log("✅ API key deleted successfully:", data)
+    revalidatePath("/dashboard/settings/profile")
+    return { success: true, message: "🗑️ API key deleted successfully!" }
+  } catch (error) {
+    console.error("❌ Unexpected error in deleteApiKey:", error)
+    return { error: "Failed to delete API key. Please try again." }
+  }
+}
+
+export async function getApiKeys(): Promise<ApiKeyWithModel[]> {
+  console.log("📋 Starting getApiKeys...")
+
+  const supabase = getSupabaseFromServer()
+
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+    console.log("✅ Got user ID:", userId)
+  } catch (error) {
+    console.error("❌ Authentication error in getApiKeys:", error)
+    return []
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("api_keys")
+      .select("id, provider, key_name, created_at, preferred_model")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("❌ Error fetching API keys:", error)
+      return []
+    }
+
+    console.log("✅ Fetched API keys:", data?.length || 0, "keys")
+    return data || []
+  } catch (error) {
+    console.error("❌ Unexpected error in getApiKeys:", error)
+    return []
+  }
+}
+
+export async function getDecryptedApiKey(provider: string, userId?: string): Promise<string | null> {
+  console.log("🔓 Getting decrypted API key for provider:", provider)
+
+  const supabase = getSupabaseFromServer()
+  let targetUserId = userId
+
+  if (!targetUserId) {
+    try {
+      targetUserId = await getDefaultUserId()
+      console.log("✅ Got user ID:", targetUserId)
+    } catch (error) {
+      console.error("❌ Authentication error in getDecryptedApiKey:", error)
+      return null
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("api_keys")
+      .select("encrypted_key")
+      .eq("user_id", targetUserId)
+      .eq("provider", provider)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error || !data) {
+      console.log("ℹ️ No API key found for provider:", provider)
       return null
     }
 
-    // Decrypt the API key
-    const decryptedKey = retrieveApiKeyFromStorage(keyData.api_key_value)
+    console.log("🔓 Decrypting API key...")
+    const decryptedKey = decrypt(data.encrypted_key)
+    console.log("✅ API key decrypted successfully")
     return decryptedKey
-  } catch (e) {
-    console.error(`Error retrieving API key for ${serviceId}:`, e)
+  } catch (error) {
+    console.error("❌ Error decrypting API key:", error)
     return null
+  }
+}
+
+export async function getPreferredModel(provider: string, userId?: string): Promise<string | null> {
+  console.log("🎯 Getting preferred model for provider:", provider)
+
+  const supabase = getSupabaseFromServer()
+  let targetUserId = userId
+
+  if (!targetUserId) {
+    try {
+      targetUserId = await getDefaultUserId()
+      console.log("✅ Got user ID:", targetUserId)
+    } catch (error) {
+      console.error("❌ Authentication error in getPreferredModel:", error)
+      return null
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("api_keys")
+      .select("preferred_model")
+      .eq("user_id", targetUserId)
+      .eq("provider", provider)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error || !data) {
+      console.log("ℹ️ No preferred model found for provider:", provider)
+      return getDefaultModel(provider) // Return default model if none set
+    }
+
+    console.log("✅ Found preferred model:", data.preferred_model)
+    return data.preferred_model || getDefaultModel(provider)
+  } catch (error) {
+    console.error("❌ Error getting preferred model:", error)
+    return getDefaultModel(provider)
   }
 }

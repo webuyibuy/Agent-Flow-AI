@@ -1,5 +1,6 @@
 "use client"
 import { useActionState } from "react"
+import { useState, useEffect } from "react"
 import { storeAgentConfiguration, type AgentConfigState } from "@/app/onboarding/agent-config/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Info, Settings, Terminal, ArrowRight } from "lucide-react"
+import CustomQuestionsForm from "./custom-questions-form"
+import { useRouter } from "next/navigation"
 
 interface AgentConfigFormProps {
   templateSlug: string
@@ -44,8 +47,18 @@ const templatePlaceholders: Record<string, { goal?: string; behavior?: string }>
 export default function AgentConfigForm({ templateSlug, templateName }: AgentConfigFormProps) {
   const initialState: AgentConfigState = {}
   const [state, formAction, isPending] = useActionState(storeAgentConfiguration, initialState)
+  const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({})
+  const router = useRouter()
 
   const placeholders = templatePlaceholders[templateSlug] || templatePlaceholders.custom
+  const [agentGoal, setAgentGoal] = useState<string>("")
+
+  // Handle redirect after successful form submission
+  useEffect(() => {
+    if (state?.success && state?.redirectTo) {
+      router.push(state.redirectTo)
+    }
+  }, [state, router])
 
   return (
     <div className="w-full max-w-xl space-y-8">
@@ -96,6 +109,7 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
             maxLength={500}
             className="mt-1 min-h-[100px]"
             aria-describedby="agentGoal-error"
+            onChange={(e) => setAgentGoal(e.target.value)}
           />
           {state?.errors?.agentGoal && (
             <p id="agentGoal-error" className="mt-1 text-sm text-red-600">
@@ -132,6 +146,13 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
           )}
         </div>
 
+        <CustomQuestionsForm
+          templateSlug={templateSlug}
+          templateName={templateName || "Agent"}
+          agentGoal={agentGoal}
+          onAnswersChange={setCustomAnswers}
+        />
+
         <div className="space-y-2 rounded-md border border-gray-200 dark:border-gray-700 p-4">
           <h3 className="font-medium text-gray-700 dark:text-gray-300">Tool Access</h3>
           <div className="flex items-center space-x-2 rounded-md bg-blue-50 dark:bg-blue-900/30 p-3 text-sm text-blue-700 dark:text-blue-300">
@@ -143,13 +164,15 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
           </div>
         </div>
 
-        {state?.message && !state.success && (
+        {state?.message && (
           <Alert variant={state.errors?._form || state.errors ? "destructive" : "default"}>
             <Terminal className="h-4 w-4" />
             <AlertTitle>{state.errors?._form || state.errors ? "Error" : "Notice"}</AlertTitle>
             <AlertDescription>{state.message}</AlertDescription>
           </Alert>
         )}
+
+        <input type="hidden" name="customAnswers" value={JSON.stringify(customAnswers)} />
 
         <Button
           type="submit"

@@ -1,105 +1,224 @@
 import { getSupabaseFromServer } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import DependencyList, { type DependencyTask } from "@/components/dependency-list"
-import { Suspense } from "react"
-import type { Metadata } from "next"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertTriangle } from "lucide-react"
-import { Loader2 } from "lucide-react"
-import { Info } from "lucide-react"
-import RealtimeStatusIndicator from "@/components/realtime-status-indicator"
+import { getDefaultUserId } from "@/lib/default-user"
+import DependencyManager from "@/components/dependency-manager"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { AlertTriangle, Clock, CheckCircle2 } from "lucide-react"
 
-export const metadata: Metadata = {
-  title: "Dependency Basket - AgentFlow",
-}
-
-async function FetchDependencies() {
+export default async function DependenciesPage() {
   const supabase = getSupabaseFromServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
-  if (!user) {
-    // This should ideally be caught by a layout or middleware protecting /dashboard routes
-    redirect("/login")
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+  } catch (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-red-600">Authentication Required</h1>
+          <p className="text-gray-600 mt-2">Please log in to view your dependencies.</p>
+        </div>
+      </div>
+    )
   }
 
-  // Fetch tasks that are dependencies, not done, and belong to the user's agents
-  const { data: tasks, error } = await supabase
+  console.log("🔍 Fetching dependencies for user:", userId)
+
+  // Get all dependency tasks for user's agents with better filtering
+  // CRITICAL FIX: Only get tasks where is_dependency=true to avoid showing moved tasks
+  const { data: dependencies, error } = await supabase
     .from("tasks")
-    .select(
-      `
+    .select(`
       id,
       title,
       blocked_reason,
       created_at,
+      updated_at,
+      status,
+      metadata,
+      is_dependency,
+      auto_generated,
       agent_id,
       agents (
-        name
+        id,
+        name,
+        owner_id
       )
-    `,
-    )
-    .eq("is_dependency", true)
-    .neq("status", "done") // Not equal to 'done'
-    .eq("agents.owner_id", user.id) // Filter by owner_id on the related agents table
-    .order("created_at", { ascending: true })
+    `)
+    .eq("agents.owner_id", userId) // Filter by agent owner
+    .eq("is_dependency", true) // CRITICAL: Only show actual dependencies
+    .order("created_at", { ascending: false })
 
   if (error) {
-    console.error("Error fetching dependency tasks:", error)
+    console.error("Error fetching dependencies:", error)
     return (
-      <Alert variant="destructive">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Error Loading Dependencies</AlertTitle>
-        <AlertDescription>
-          Could not fetch your pending dependencies at this time. Please try refreshing.
-        </AlertDescription>
-      </Alert>
+      <div className="container mx-auto p-6">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-red-600">Error Loading Dependencies</h1>
+          <p className="text-gray-600 mt-2">Please try again later.</p>
+          <p className="text-sm text-red-500 mt-2">{error.message}</p>
+        </div>
+      </div>
     )
   }
-  // Cast to DependencyTask[] as the select query structure matches
-  return <DependencyList tasks={tasks as DependencyTask[]} />
-}
 
-export default async function DependenciesPage() {
-  // Auth check can be part of a layout later
-  const supabase = getSupabaseFromServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  console.log(`📊 Found ${dependencies?.length || 0} total dependencies`)
 
-  if (!user) {
-    redirect("/login")
+  // All dependencies should already be filtered by user ownership
+  const userDependencies = dependencies || []
+
+  // Categorize dependencies
+  const pendingDeps = userDependencies.filter((dep) => dep.status !== "done")
+  const completedDeps = userDependencies.filter((dep) => dep.status === "done")
+
+  // Use metadata for additional properties
+  const urgentDeps = pendingDeps.filter(
+    (dep) =>
+      dep.metadata?.priority === "urgent" ||
+      dep.metadata?.priority === "high" ||
+      dep.blocked_reason?.toLowerCase().includes("urgent"),
+  )
+
+  const taskbarDeps = pendingDeps.filter((dep) => dep.metadata?.in_taskbar === true)
+
+  console.log(`📈 Categorized: ${pendingDeps.length} pending, ${completedDeps.length} completed`)
+
+  // EMERGENCY FIX: If we still don't have dependencies, try a direct query for blocked tasks
+  let emergencyDeps: any[] = []
+  if (pendingDeps.length === 0) {
+    console.log("⚠️ No dependencies found with standard query, trying emergency query...")
+
+    const { data: blockedTasks } = await supabase
+      .from("tasks")
+      .select(`
+        id,
+        title,
+        blocked_reason,
+        created_at,
+        updated_at,
+        status,
+        metadata,
+        agent_id,
+        agents (
+          id,
+          name,
+          owner_id
+        )
+      `)
+      .eq("status", "blocked")
+      .eq("is_dependency", true) // CRITICAL: Only include actual dependencies
+      .order("created_at", { ascending: false })
+
+    if (blockedTasks && blockedTasks.length > 0) {
+      console.log(`🚨 Emergency query found ${blockedTasks.length} blocked tasks`)
+
+      // Filter to only those owned by this user
+      emergencyDeps = blockedTasks.filter((task) => task.agents?.owner_id === userId)
+      console.log(`🚨 After filtering, found ${emergencyDeps.length} emergency dependencies`)
+
+      // Add these to our pending deps
+      pendingDeps.push(...emergencyDeps)
+    }
   }
 
   return (
-    <main className="flex-1 p-6">
-      <div className="max-w-4xl mx-auto w-full">
-        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start space-x-3">
-              <Info className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="text-md font-semibold text-blue-800 dark:text-blue-200">Your Action Required</h3>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  These tasks require your input or approval for your agents to proceed. Completing them will unblock
-                  your agents and allow them to continue their work.
-                </p>
-              </div>
-            </div>
-            <RealtimeStatusIndicator />
-          </div>
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dependency Management</h1>
+          <p className="text-gray-600 mt-2">Manage tasks that your AI agents need you to complete</p>
         </div>
-        <Suspense
-          fallback={
-            <div className="text-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-[#007AFF] mx-auto" />
-              <p className="mt-2 text-gray-500 dark:text-gray-400">Loading your dependencies...</p>
-            </div>
-          }
-        >
-          <FetchDependencies />
-        </Suspense>
       </div>
-    </main>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingDeps.length}</div>
+            <p className="text-xs text-gray-600">Awaiting your action</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Urgent</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{urgentDeps.length}</div>
+            <p className="text-xs text-gray-600">High priority items</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">In Taskbar</CardTitle>
+            <Clock className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{taskbarDeps.length}</div>
+            <p className="text-xs text-gray-600">Added to your taskbar</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{completedDeps.length}</div>
+            <p className="text-xs text-gray-600">Recently finished</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Debug Information (remove in production) */}
+      {process.env.NODE_ENV === "development" && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-sm text-blue-800">Debug Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs text-blue-700 space-y-1">
+              <p>User ID: {userId}</p>
+              <p>Total Dependencies Found: {userDependencies.length}</p>
+              <p>Pending: {pendingDeps.length}</p>
+              <p>Completed: {completedDeps.length}</p>
+              <p>Emergency Dependencies: {emergencyDeps.length}</p>
+              <p>Query: is_dependency=true</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* No Dependencies Message */}
+      {pendingDeps.length === 0 && (
+        <Card className="bg-yellow-50 border-yellow-200">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-medium text-yellow-800">No Dependencies Found</h3>
+            <p className="text-sm text-yellow-700 mt-2">
+              We couldn't find any dependencies that need your attention. This might be because:
+            </p>
+            <ul className="list-disc pl-5 mt-2 text-sm text-yellow-700 space-y-1">
+              <li>Your agents haven't created any dependencies yet</li>
+              <li>All dependencies have been completed</li>
+              <li>You've moved all dependencies to your active tasks</li>
+            </ul>
+            <p className="text-sm text-yellow-700 mt-4">
+              Try creating a new agent or checking your home dashboard to see if there are any tasks you're currently
+              working on.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dependency Manager */}
+      <DependencyManager pendingDependencies={pendingDeps} completedDependencies={completedDeps} />
+    </div>
   )
 }

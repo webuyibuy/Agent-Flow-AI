@@ -3,7 +3,6 @@
 import { useState } from "react"
 import Link from "next/link"
 import { PlusCircle, Loader2, Zap } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import AgentSelectionCard, { type Agent } from "./agent-selection-card"
@@ -62,27 +61,28 @@ export default function AgentManagerClient({
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             {selectedAgentId && (
-              <Button
-                variant="outline"
+              <button
                 onClick={handleClearSelection}
                 disabled={isClearing}
-                className="w-full sm:w-auto"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-[#d1d1d6] bg-white hover:bg-[#f2f2f7] text-[#1c1c1e] font-medium rounded-xl shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.98] disabled:opacity-50 w-full sm:w-auto"
               >
                 {isClearing ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Clearing...
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Clearing...
                   </>
                 ) : (
                   "Clear Active Selection"
                 )}
-              </Button>
+              </button>
             )}
-            <Button asChild className="bg-[#007AFF] hover:bg-[#0056b3] text-white w-full sm:w-auto">
-              <Link href="/dashboard/agents/new">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create New Agent
-              </Link>
-            </Button>
+            <Link
+              href="/dashboard/agents/new"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#007AFF] hover:bg-[#0056b3] text-white font-medium rounded-xl shadow-md transition-all duration-200 hover:shadow-lg active:scale-[0.98] w-full sm:w-auto"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Create New Agent
+            </Link>
           </div>
         </div>
 
@@ -115,12 +115,13 @@ export default function AgentManagerClient({
             <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-4 sm:mb-6 px-4">
               {searchQuery ? "Try adjusting your search criteria." : "Create your first agent to get started!"}
             </p>
-            <Button asChild size="lg" className="bg-[#007AFF] hover:bg-[#0056b3] text-white">
-              <Link href="/dashboard/agents/new">
-                <PlusCircle className="mr-2 h-4 w-4 sm:h-5 w-5" />
-                Create New Agent
-              </Link>
-            </Button>
+            <Link
+              href="/dashboard/agents/new"
+              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0056b3] text-white font-medium rounded-xl shadow-md transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+            >
+              <PlusCircle className="h-5 w-5" />
+              Create New Agent
+            </Link>
           </div>
         )}
       </div>

@@ -6,6 +6,7 @@ import { z } from "zod"
 import { addAgentLog } from "./actions"
 import { sendSlackNotification } from "@/lib/slack-notifications"
 import { getDefaultUserId } from "@/lib/default-user"
+import { triggerAgentExecution } from "./actions"
 
 const TaskCreationSchema = z.object({
   title: z
@@ -67,6 +68,12 @@ export interface BulkTaskActionResult {
   error?: string
   message?: string
   affectedCount?: number
+}
+
+export interface TaskActionResult {
+  success: boolean
+  error?: string
+  message?: string
 }
 
 export async function createTask(
@@ -577,5 +584,70 @@ export async function bulkDeleteTasks(agentId: string, taskIds: string[]): Promi
   } catch (error) {
     console.error("Unexpected error in bulk deletion:", error)
     return { error: "An unexpected error occurred during bulk deletion." }
+  }
+}
+
+export async function markTaskComplete(
+  taskId: string,
+  agentId: string,
+  completionNotes?: string,
+): Promise<TaskActionResult> {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    // Update the task status to "done"
+    const { error: updateError } = await supabase
+      .from("tasks")
+      .update({
+        status: "done",
+        updated_at: new Date().toISOString(),
+        metadata: {
+          completion_notes: completionNotes || "Task completed",
+          completed_at: new Date().toISOString(),
+        },
+      })
+      .eq("id", taskId)
+
+    if (updateError) {
+      console.error("Error marking task as complete:", updateError)
+      return { success: false, error: "Failed to update task status" }
+    }
+
+    // Check if this was a dependency task
+    const { data: task } = await supabase.from("tasks").select("is_dependency").eq("id", taskId).single()
+
+    // If this was a dependency task, restart the agent
+    if (task?.is_dependency) {
+      try {
+        // Log that dependency is resolved
+        await supabase.from("agent_logs").insert({
+          agent_id: agentId,
+          log_type: "milestone",
+          message: "Dependency resolved. Agent can continue working.",
+          task_id: taskId,
+          created_at: new Date().toISOString(),
+        })
+
+        // Restart agent execution
+        await triggerAgentExecution(agentId)
+      } catch (execError) {
+        console.error("Error restarting agent after dependency resolved:", execError)
+        // We don't return an error here as the task was successfully marked complete
+      }
+    }
+
+    // Revalidate the agent page
+    revalidatePath(`/dashboard/agents/${agentId}`)
+
+    return {
+      success: true,
+      message: task?.is_dependency ? "Dependency resolved. Agent has resumed working." : "Task marked as complete.",
+    }
+  } catch (error) {
+    console.error("Error in markTaskComplete:", error)
+    return {
+      success: false,
+      error: "An unexpected error occurred while completing the task.",
+    }
   }
 }

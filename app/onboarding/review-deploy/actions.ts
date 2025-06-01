@@ -1,100 +1,211 @@
 "use server"
 
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
-import { z } from "zod"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
+import { multiLLMProvider } from "@/lib/multi-llm-provider"
+import { AITaskAnalyzer } from "@/lib/ai-task-analyzer"
 import { getDefaultUserId } from "@/lib/default-user"
-import { addAgentLog } from "@/app/dashboard/agents/[id]/actions" // Assuming this action exists for logging
 
-// Schema for agent data stored in cookies, matching AgentConfigSchema
-const AgentDataFromCookieSchema = z.object({
-  agentName: z.string().min(3).max(50),
-  agentGoal: z.string().min(10).max(500),
-  agentBehavior: z.string().max(1000).optional(),
-  templateSlug: z.string(),
-})
-
-export interface DeployAgentState {
-  message?: string
-  errors?: {
-    _form?: string[]
-  }
-  success?: boolean
-  agentId?: string
+interface DeployAgentParams {
+  name: string
+  goal: string
+  templateSlug?: string
+  templateName?: string
+  behavior?: string
+  customAnswers?: Record<string, string>
+  userId: string
+  plan?: any
 }
 
-export async function deployAgent(
-  prevState: DeployAgentState | undefined,
-  formData: FormData, // formData is not directly used but required by useActionState signature
-): Promise<DeployAgentState> {
-  const supabaseAdmin = getSupabaseAdmin()
+interface DeployAgentResult {
+  success: boolean
+  message?: string
+  error?: string
+  agentId?: string
+  redirectUrl?: string
+}
 
-  let userId: string
+export async function deployAgent(params: DeployAgentParams): Promise<DeployAgentResult> {
   try {
-    userId = await getDefaultUserId()
-  } catch (error) {
-    console.error("Authentication error during agent deployment:", error)
-    return { errors: { _form: ["Authentication required to deploy agent."] } }
-  }
+    console.log("Starting agent deployment with params:", JSON.stringify(params, null, 2))
 
-  const onboardingAgentDataCookie = cookies().get("onboarding_agent_data")
+    // Get the user ID
+    let userId = params.userId
+    if (!userId) {
+      try {
+        userId = await getDefaultUserId()
+      } catch (error) {
+        console.error("Error getting default user ID:", error)
+        return {
+          success: false,
+          error: "Authentication required. Please log in and try again.",
+        }
+      }
+    }
 
-  if (!onboardingAgentDataCookie) {
-    return { errors: { _form: ["Agent configuration not found. Please restart the onboarding process."] } }
-  }
+    // Get admin Supabase client for database operations
+    const supabase = getSupabaseAdmin()
 
-  let agentData: z.infer<typeof AgentDataFromCookieSchema>
-  try {
-    agentData = AgentDataFromCookieSchema.parse(JSON.parse(onboardingAgentDataCookie.value))
-  } catch (error) {
-    console.error("Invalid agent data in cookie:", error)
-    return { errors: { _form: ["Invalid agent configuration data. Please restart the onboarding process."] } }
-  }
-
-  try {
-    const { data, error: insertError } = await supabaseAdmin
+    // Create the agent record
+    const { data: agent, error: agentError } = await supabase
       .from("agents")
       .insert({
-        name: agentData.agentName.trim(),
-        goal: agentData.agentGoal.trim(),
-        behavior: agentData.agentBehavior?.trim() || null,
-        template_slug: agentData.templateSlug,
+        name: params.name,
+        goal: params.goal,
         owner_id: userId,
-        status: "active", // Default status for new agents
+        template_slug: params.templateSlug || "custom-agent",
+        template_name: params.templateName || "Custom Agent",
+        behavior: params.behavior || "",
+        status: "active",
+        configuration_method: "onboarding",
       })
       .select("id")
       .single()
 
-    if (insertError) {
-      console.error("Error inserting new agent:", insertError)
-      return { errors: { _form: [`Failed to create agent: ${insertError.message}`] } }
+    if (agentError) {
+      console.error("Error creating agent:", agentError)
+      return {
+        success: false,
+        error: `Failed to create agent: ${agentError.message}`,
+      }
     }
 
-    if (!data?.id) {
-      return { errors: { _form: ["Failed to retrieve new agent ID after creation."] } }
+    const agentId = agent.id
+
+    // Store custom answers if provided
+    if (params.customAnswers && Object.keys(params.customAnswers).length > 0) {
+      const { error: customDataError } = await supabase.from("agent_custom_data").insert({
+        agent_id: agentId,
+        custom_data: params.customAnswers,
+        configuration_method: "onboarding",
+      })
+
+      if (customDataError) {
+        console.error("Error storing custom answers:", customDataError)
+        // Non-critical error, continue with deployment
+      }
     }
 
-    // Clear the onboarding cookie
-    cookies().delete("onboarding_agent_data")
+    // Create initial tasks based on the plan or generate them
+    let tasks = []
+    if (params.plan && params.plan.tasks) {
+      // Use the provided plan
+      tasks = params.plan.tasks.map((task: any) => ({
+        agent_id: agentId,
+        title: task.title,
+        description: task.description,
+        priority: task.priority.toLowerCase(),
+        status: "todo",
+        is_dependency: false,
+      }))
+    } else {
+      // Generate tasks using AI
+      try {
+        // Try to use the user's LLM provider
+        const availableProviders = multiLLMProvider.getAvailableProviders()
 
-    // Log the agent creation
-    await addAgentLog(
-      data.id,
-      "milestone",
-      `Agent "${agentData.agentName}" created successfully.`,
-      undefined,
-      {
-        templateSlug: agentData.templateSlug,
-        createdBy: userId,
-      },
-      userId,
-    )
+        if (availableProviders.length > 0) {
+          // Use the AI Task Analyzer to generate tasks
+          const taskAnalyzer = new AITaskAnalyzer()
+          const analysisResult = await taskAnalyzer.analyzeUserNeedsAndCreateTasks({
+            userInput: `Create initial tasks for a ${params.templateName || "custom"} agent with the goal: ${params.goal}`,
+            agentGoal: params.goal,
+            agentType: params.templateName || "Custom Agent",
+            userId: userId,
+          })
 
-    // Redirect to the new agent's detail page
-    redirect(`/dashboard/agents/${data.id}`)
+          if (analysisResult.success) {
+            // Use the generated tasks
+            const creationResult = await taskAnalyzer.createTasksFromAnalysis(agentId, userId, analysisResult)
+            if (!creationResult.success) {
+              console.error("Error creating tasks from analysis:", creationResult.error)
+            }
+          } else {
+            console.error("Task analysis failed:", analysisResult.error)
+            // Continue with deployment even if task generation fails
+          }
+        } else {
+          // No LLM provider available, create default tasks
+          tasks = [
+            {
+              agent_id: agentId,
+              title: "Initial Setup",
+              description: "Configure the agent's initial settings and parameters.",
+              priority: "high",
+              status: "todo",
+              is_dependency: false,
+            },
+            {
+              agent_id: agentId,
+              title: "Define Success Metrics",
+              description: "Establish clear metrics to measure the agent's performance.",
+              priority: "medium",
+              status: "todo",
+              is_dependency: false,
+            },
+          ]
+
+          // Insert default tasks
+          if (tasks.length > 0) {
+            const { error: tasksError } = await supabase.from("tasks").insert(tasks)
+            if (tasksError) {
+              console.error("Error creating default tasks:", tasksError)
+              // Non-critical error, continue with deployment
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error generating tasks:", error)
+        // Continue with deployment even if task generation fails
+      }
+    }
+
+    // Update user's onboarding progress
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        onboarding_completed: true,
+        onboarding_step: 4, // Assuming this is the final step
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId)
+
+    if (profileError) {
+      console.error("Error updating onboarding progress:", profileError)
+      // Non-critical error, continue with deployment
+    }
+
+    // Add XP for completing onboarding
+    const { error: xpError } = await supabase.from("xp_log").insert({
+      owner_id: userId,
+      action: "completed_onboarding",
+      points: 100,
+      description: "Completed agent onboarding process",
+    })
+
+    if (xpError) {
+      console.error("Error adding XP for onboarding:", xpError)
+      // Non-critical error, continue with deployment
+    }
+
+    // Revalidate relevant paths
+    revalidatePath("/dashboard")
+    revalidatePath(`/dashboard/agents/${agentId}`)
+
+    console.log("Agent deployment successful. Agent ID:", agentId)
+
+    // Return success with redirect information
+    return {
+      success: true,
+      message: "Agent deployed successfully!",
+      agentId: agentId,
+      redirectUrl: `/dashboard/agents/${agentId}`,
+    }
   } catch (error) {
-    console.error("Unexpected error during agent deployment:", error)
-    return { errors: { _form: ["An unexpected error occurred during agent deployment. Please try again."] } }
+    console.error("Unexpected error in deployAgent:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred during deployment.",
+    }
   }
 }
