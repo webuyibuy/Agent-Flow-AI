@@ -93,28 +93,33 @@ export async function addAgentLog(
     return { error: "User ID for log does not match agent owner." }
   }
 
-  const { data: newLog, error } = await supabaseAdmin
-    .from("agent_logs")
-    .insert({
-      agent_id: agentId,
-      user_id: effectiveUserId,
-      log_type: logType,
-      message: message,
-      task_id: taskId,
-      metadata: metadata,
-    })
-    .select("id")
-    .single()
+  try {
+    const { data: newLog, error } = await supabaseAdmin
+      .from("agent_logs")
+      .insert({
+        agent_id: agentId,
+        user_id: effectiveUserId,
+        log_type: logType,
+        message: message,
+        task_id: taskId || null,
+        metadata: metadata || null,
+      })
+      .select("id")
+      .single()
 
-  if (error) {
-    console.error("Error adding agent log:", error)
-    return { error: "Failed to add agent log." }
+    if (error) {
+      console.error("Error adding agent log:", error)
+      return { error: "Failed to add agent log." }
+    }
+    if (newLog) {
+      revalidatePath(`/dashboard/agents/${agentId}`)
+      return { success: true, logId: newLog.id }
+    }
+    return { error: "Failed to add log, no ID returned." }
+  } catch (insertError) {
+    console.error("Exception adding agent log:", insertError)
+    return { error: "Exception occurred while adding log." }
   }
-  if (newLog) {
-    revalidatePath(`/dashboard/agents/${agentId}`)
-    return { success: true, logId: newLog.id }
-  }
-  return { error: "Failed to add log, no ID returned." }
 }
 
 export interface ToggleAgentStatusResult {
@@ -275,5 +280,20 @@ export async function exportAgentTasksToCsv(agentId: string): Promise<ExportTask
   } catch (csvError: any) {
     console.error("Error converting tasks to CSV:", csvError)
     return { error: `Failed to convert tasks to CSV: ${csvError.message}` }
+  }
+}
+
+export async function triggerAgentExecution(
+  agentId: string,
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  try {
+    const { startAgentExecution } = await import("./execution-actions")
+    return await startAgentExecution(agentId)
+  } catch (error) {
+    console.error("Error triggering agent execution:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to start agent execution",
+    }
   }
 }

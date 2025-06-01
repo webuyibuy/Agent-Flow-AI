@@ -1,48 +1,44 @@
 import { Suspense } from "react"
 import type { Metadata } from "next"
-import AgentTemplateSelector from "@/components/agent-template-selector"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { getDefaultUserId } from "@/lib/default-user"
+import { redirect } from "next/navigation"
+import SimpleAgentCreator from "@/components/simple-agent-creator"
+import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Create New Agent - AgentFlow",
+  title: "Create Agent - AgentFlow",
 }
 
-export default function NewAgentPage() {
-  return (
-    <div className="flex-1 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Create New Agent</h1>
-          <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-            Choose from our pre-built templates or create a custom agent from scratch.
-          </p>
-        </div>
+export default async function NewAgentPage() {
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+  } catch (error) {
+    redirect("/login")
+  }
 
-        <Suspense
-          fallback={
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Loading...
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-20 flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-[#007AFF]" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          }
-        >
-          <AgentTemplateSelector />
-        </Suspense>
+  return (
+    <div className="container mx-auto py-8 max-w-2xl">
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold text-gray-900">Create Your AI Agent</h1>
+        <p className="mt-2 text-gray-600">
+          Tell your agent what you want to achieve, and it will start working immediately
+        </p>
       </div>
+
+      <Suspense
+        fallback={
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p>Loading agent creator...</p>
+            </CardContent>
+          </Card>
+        }
+      >
+        <SimpleAgentCreator userId={userId} />
+      </Suspense>
     </div>
   )
 }

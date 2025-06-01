@@ -20,7 +20,16 @@ export default async function ManageAgentsPage() {
 
   const { data: agents, error } = await supabase
     .from("agents")
-    .select("id, name, template_slug, goal, status, created_at")
+    .select(`
+    id, 
+    name, 
+    template_slug, 
+    goal, 
+    status, 
+    created_at,
+    task_count:tasks(count),
+    dependency_count:tasks(count).eq(is_dependency, true).neq(status, 'completed')
+  `)
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false })
 

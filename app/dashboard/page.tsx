@@ -1,171 +1,422 @@
-import { Button } from "@/components/ui/button"
-import { PlusCircle, CheckCircle, Zap, Star, Settings } from "lucide-react"
-import Link from "next/link"
+"use client"
+
+import { useState, useEffect, useCallback, useActionState } from "react"
+import {
+  CheckCircleIcon,
+  PlusCircle,
+  ArrowRight,
+  Clock,
+  FileText,
+  Bot,
+  Loader2,
+  AlertTriangle,
+  Zap,
+} from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import {
-  getCurrentBadge,
-  getNextBadge,
-  POINTS_PER_TASK_COMPLETION,
-  badges as allBadgesConfig,
-} from "@/lib/gamification"
-import { Progress } from "@/components/ui/progress"
-import { getDefaultUserId } from "@/lib/default-user"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { completeTaskAndMoveToHistory } from "@/app/dashboard/dependencies/actions"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { motion } from "framer-motion"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import type { User } from "@supabase/supabase-js"
+import { useRouter } from "next/navigation"
 
-// Define available agent statuses for filtering
-const AGENT_STATUSES = ["active", "paused", "completed", "error"] as const
-type AgentStatus = (typeof AGENT_STATUSES)[number]
-
-export default async function DashboardPage({
+export default function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { query?: string; status?: string; newAgent?: string }
+  searchParams?: { created?: string }
 }) {
-  // Get user ID without Supabase calls
-  const userId = await getDefaultUserId()
-  const newAgentHref = "/dashboard/agents/new"
+  const router = useRouter()
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error" | "unauthenticated">(
+    "checking",
+  )
+  const [agents, setAgents] = useState<any[]>([])
+  const [activeTasks, setActiveTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
-  // Use mock/default data instead of fetching from Supabase
-  const totalXp = 0
-  const currentBadge = getCurrentBadge(totalXp)
-  const nextBadge = getNextBadge(totalXp)
+  const [completionState, completeTaskFormAction, isCompletingTask] = useActionState(
+    completeTaskAndMoveToHistory,
+    undefined,
+  )
 
-  let progressToNextBadge = 0
-  let xpForNextBadge = 0
-  if (nextBadge) {
-    const xpEarnedTowardsNext = totalXp - (currentBadge?.threshold || 0)
-    const xpNeededForNextOverall = nextBadge.threshold - (currentBadge?.threshold || 0)
-    progressToNextBadge = xpNeededForNextOverall > 0 ? (xpEarnedTowardsNext / xpNeededForNextOverall) * 100 : 0
-    xpForNextBadge = nextBadge.threshold
-  } else if (currentBadge) {
-    progressToNextBadge = 100
-  }
+  // Auth handling
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient()
 
-  // Mock empty agents array instead of fetching from Supabase
-  const agents: any[] = []
-  const agentsError = null
+    const fetchUser = async () => {
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
 
-  const newAgentId = searchParams?.newAgent
-  const CurrentBadgeIcon = currentBadge?.icon
+        if (sessionError || !session) {
+          setConnectionStatus("unauthenticated")
+          setLoading(false)
+          router.push("/login")
+          return
+        }
 
-  return (
-    <main className="flex-1 p-6">
-      {newAgentId && (
-        <Alert className="mb-6 bg-green-50 border-green-200 text-green-700 dark:bg-green-900/50 dark:border-green-700 dark:text-green-300">
-          <CheckCircle className="h-4 w-4 !text-green-700 dark:!text-green-300" />
-          <AlertTitle>Agent Deployed!</AlertTitle>
-          <AlertDescription>
-            Your new agent has been successfully created and initial tasks are being set up.
-          </AlertDescription>
-        </Alert>
-      )}
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser()
 
-      {/* Gamification Cards with default/mock data */}
-      <div className="mb-6 grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total XP</CardTitle>
-            <Star className="h-4 w-4 text-yellow-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalXp}</div>
-            <p className="text-xs text-muted-foreground">Keep completing tasks to earn more!</p>
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Badge</CardTitle>
-            {CurrentBadgeIcon && <CurrentBadgeIcon className="h-5 w-5 text-orange-400" />}
-          </CardHeader>
-          <CardContent>
-            {currentBadge ? (
-              <>
-                <div className="text-2xl font-bold">{currentBadge.name}</div>
-                <p className="text-xs text-muted-foreground">{currentBadge.description}</p>
-                {nextBadge ? (
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Progress to {nextBadge.name}</span>
-                      <span className="font-medium">
-                        {totalXp} / {xpForNextBadge} XP
-                      </span>
-                    </div>
-                    <Progress value={progressToNextBadge} className="h-2" />
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-2">You've earned the highest badge!</p>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="text-2xl font-bold">No Badge Yet</div>
-                <p className="text-xs text-muted-foreground">
-                  Earn {allBadgesConfig[allBadgesConfig.length - 1].threshold} XP to get your first badge!
-                </p>
-                <div className="mt-2">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">
-                      Progress to {allBadgesConfig[allBadgesConfig.length - 1].threshold}
-                    </span>
-                    <span className="font-medium">
-                      {totalXp} / {allBadgesConfig[allBadgesConfig.length - 1].threshold} XP
-                    </span>
-                  </div>
-                  <Progress
-                    value={(totalXp / allBadgesConfig[allBadgesConfig.length - 1].threshold) * 100}
-                    className="h-2"
-                  />
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasks Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{Math.floor(totalXp / POINTS_PER_TASK_COMPLETION)}</div>
-            <p className="text-xs text-muted-foreground">Across all your agents.</p>
-          </CardContent>
-        </Card>
-      </div>
+        if (userError || !user) {
+          setConnectionStatus("unauthenticated")
+          setLoading(false)
+          router.push("/login")
+          return
+        }
 
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Your Agents</h2>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button asChild className="bg-[#007AFF] hover:bg-[#0056b3] text-white">
-            <Link href="/dashboard/agents/new">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Agent
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/dashboard/agents/manage">
-              <Settings className="mr-2 h-4 w-4" />
-              Manage Agents
-            </Link>
-          </Button>
+        setCurrentUser(user)
+        setAuthError(null)
+      } catch (error: any) {
+        setAuthError(`Authentication failed: ${error.message}`)
+        setConnectionStatus("error")
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        setCurrentUser(null)
+        setConnectionStatus("unauthenticated")
+        router.push("/login")
+      } else if (event === "SIGNED_IN" && session?.user) {
+        setCurrentUser(session.user)
+        setAuthError(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [router])
+
+  // Data loading
+  const loadData = useCallback(async (user: User) => {
+    if (!user) return
+
+    setLoading(true)
+
+    try {
+      const supabase = getSupabaseBrowserClient()
+
+      // Fetch agents
+      const { data: agentsData, error: agentsError } = await supabase
+        .from("agents")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (agentsError) {
+        console.error("Error loading agents:", agentsError.message)
+        setAgents([])
+      } else {
+        setAgents(agentsData || [])
+      }
+
+      // Fetch user's active tasks (from dependencies)
+      const { data: tasksData, error: tasksError } = await supabase
+        .from("tasks")
+        .select(`
+          *,
+          agents!inner(id, name, owner_id)
+        `)
+        .eq("agents.owner_id", user.id)
+        .eq("is_dependency", false)
+        .eq("status", "in_progress")
+        .eq("metadata->>moved_to_tasks", "true")
+        .eq("metadata->>workflow_status", "user_working")
+        .order("created_at", { ascending: false })
+
+      if (tasksError) {
+        console.error("Error loading active tasks:", tasksError.message)
+        setActiveTasks([])
+      } else {
+        setActiveTasks(tasksData || [])
+      }
+
+      setConnectionStatus("connected")
+    } catch (error: any) {
+      console.error("Critical error in loadData:", error.message)
+      setConnectionStatus("error")
+      setAgents([])
+      setActiveTasks([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currentUser) {
+      loadData(currentUser)
+    }
+  }, [currentUser, loadData])
+
+  // Handle task completion
+  useEffect(() => {
+    if (completionState?.success && completionState.taskId) {
+      setActiveTasks((prevTasks) => prevTasks.filter((task) => task.id !== completionState.taskId))
+    }
+  }, [completionState])
+
+  const isNewlyCreated = searchParams?.created === "true"
+
+  // Loading state
+  if (loading && connectionStatus === "checking") {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-blue-50 mb-4">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+          <p className="text-gray-600 font-medium">Loading your workspace...</p>
         </div>
       </div>
+    )
+  }
 
-      {/* Show empty state since we're not fetching agents */}
-      <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-        <Zap className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400 dark:text-gray-500 mb-4" />
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-          Database Connection Disabled
-        </h3>
-        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-4 sm:mb-6 px-4">
-          Supabase functionality has been temporarily disabled to prevent connection errors.
-        </p>
-        <Button asChild size="lg" className="bg-[#007AFF] hover:bg-[#0056b3] text-white">
-          <Link href="/dashboard/agents/new">
-            <PlusCircle className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-            Create Your First Agent
-          </Link>
-        </Button>
+  // Error state
+  if (connectionStatus === "error" || authError) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center max-w-md">
+          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-gray-600 mb-6">{authError || "Please try refreshing the page."}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
       </div>
-    </main>
+    )
+  }
+
+  // Unauthenticated state
+  if (connectionStatus === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center">
+          <Loader2 className="h-16 w-16 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Success message for new agent */}
+      {isNewlyCreated && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <Alert className="bg-green-50 border-green-200 text-green-800">
+            <CheckCircleIcon className="h-5 w-5" />
+            <AlertTitle className="font-medium">🎉 Agent Created Successfully!</AlertTitle>
+            <AlertDescription>
+              Your agent is now analyzing your goal and starting to work. You'll see its thinking process below.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Task completion feedback */}
+      {completionState?.message && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <Alert
+            className={
+              completionState.success
+                ? "bg-green-50 border-green-200 text-green-700"
+                : "bg-red-50 border-red-200 text-red-700"
+            }
+          >
+            <CheckCircleIcon className="h-5 w-5" />
+            <AlertTitle>{completionState.success ? "Task Completed!" : "Error"}</AlertTitle>
+            <AlertDescription>{completionState.message}</AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Your AI Workspace</h1>
+        <p className="text-gray-600 mt-2">Manage your agents and complete tasks they need help with</p>
+      </div>
+
+      {/* User Tasks Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <CheckCircleIcon className="h-5 w-5 text-blue-600" />
+              </div>
+              <CardTitle>Tasks for You ({activeTasks.length})</CardTitle>
+            </div>
+            <Link
+              href="/dashboard/dependencies"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <Clock className="h-4 w-4" />
+              View All Dependencies
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {activeTasks.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks for you right now</h3>
+              <p className="text-gray-600 mb-6">
+                Your agents are working autonomously. When they need your help, tasks will appear here.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link
+                  href="/dashboard/dependencies"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Clock className="h-4 w-4" />
+                  Check Dependencies
+                </Link>
+                <Link
+                  href="/dashboard/agents/new"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Create Another Agent
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="border border-blue-200 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors"
+                >
+                  <div className="flex items-start gap-4">
+                    <form action={completeTaskFormAction} className="mt-1">
+                      <input type="hidden" name="taskId" value={task.id} />
+                      <Checkbox
+                        id={`task-checkbox-${task.id}`}
+                        className="h-5 w-5 rounded border-2 border-blue-400 text-blue-600"
+                        disabled={isCompletingTask && completionState?.taskId === task.id}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            const formElement = document.getElementById(`task-checkbox-${task.id}`)?.closest("form")
+                            if (formElement) {
+                              formElement.requestSubmit()
+                            }
+                          }
+                        }}
+                      />
+                    </form>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="font-semibold text-gray-900">{task.title}</h4>
+                        {isCompletingTask && completionState?.taskId === task.id && (
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Completing...
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                        <span className="flex items-center gap-1">
+                          <Bot className="h-3 w-3" />
+                          {task.agents?.name}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {task.metadata?.moved_at ? new Date(task.metadata.moved_at).toLocaleDateString() : "Recently"}
+                        </span>
+                      </div>
+                      {task.metadata?.user_notes && (
+                        <p className="text-sm text-gray-700 bg-white/60 p-2 rounded">{task.metadata.user_notes}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-center pt-4">
+                <p className="text-sm text-gray-500 mb-2">✅ Check the box when you complete a task</p>
+                <Link
+                  href="/dashboard/dependencies"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  View all dependencies
+                </Link>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Agents Overview */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold text-gray-900">Your Agents ({agents.length})</h2>
+        <Link
+          href="/dashboard/agents/new"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
+        >
+          <PlusCircle className="h-4 w-4" />
+          Create Agent
+        </Link>
+      </div>
+
+      {agents.length === 0 ? (
+        <Card className="border-2 border-dashed border-gray-300">
+          <CardContent className="py-16 text-center">
+            <Zap className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">Create Your First AI Agent</h3>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              Tell your agent what you want to achieve, and it will start working immediately while showing you its
+              thinking process.
+            </p>
+            <Link
+              href="/dashboard/agents/new"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md"
+            >
+              <PlusCircle className="h-5 w-5" />
+              Create Your First Agent
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {agents.map((agent) => (
+            <Card key={agent.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{agent.name}</CardTitle>
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{agent.goal}</p>
+                  </div>
+                  <Badge variant={agent.status === "active" ? "default" : "secondary"}>{agent.status}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Link
+                  href={`/dashboard/agents/${agent.id}`}
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  View Details <ArrowRight className="h-4 w-4" />
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

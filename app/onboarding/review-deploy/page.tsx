@@ -1,56 +1,33 @@
 import { getSupabaseFromServer } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import ReviewDeployClient from "@/components/review-deploy-client"
-import { Suspense } from "react"
-import type { Metadata } from "next"
+import { getDefaultUserId } from "@/lib/default-user"
 
-export const metadata: Metadata = {
-  title: "Review & Deploy Agent - AgentFlow",
-}
-
-async function AuthAndProfileCheck() {
+export default async function ReviewDeployPage() {
   const supabase = getSupabaseFromServer()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
 
-  if (userError || !user) {
+  // Get the user ID
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+  } catch (error) {
     redirect("/login")
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("display_name") // We just need to know if they've been through basic onboarding
-    .eq("id", user.id)
-    .single()
+  // Get the agent configuration from session storage
+  const { data: sessionData } = await supabase.auth.getSession()
+  const agentConfig = sessionData.session?.user?.user_metadata?.onboarding_agent_config
 
-  if (profileError && profileError.code !== "PGRST116") {
-    console.error("Error fetching profile for review page:", profileError)
-    redirect("/login?message=Error fetching profile")
+  // If no agent config is found, redirect to the agent config page
+  if (!agentConfig) {
+    redirect("/onboarding/agent-config")
   }
 
-  if (!profile?.display_name) {
-    // Should have been caught earlier, but as a safeguard
-    redirect("/onboarding/name")
+  // Ensure the user ID is included in the agent data
+  const agentData = {
+    ...agentConfig,
+    userId,
   }
-  return null
-}
 
-export default async function OnboardingReviewDeployPage() {
-  await AuthAndProfileCheck()
-
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      <Suspense
-        fallback={
-          <div className="text-center">
-            <p>Loading review details...</p>
-          </div>
-        }
-      >
-        <ReviewDeployClient />
-      </Suspense>
-    </div>
-  )
+  return <ReviewDeployClient agentData={agentData} />
 }

@@ -1,6 +1,6 @@
 "use client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge as ShadBadge } from "@/components/ui/badge" // Renaming to avoid conflict
+import { Badge as ShadBadge } from "@/components/ui/badge"
 import { type Badge as UserBadgeType, badges as allBadgesConfig, getNextBadge } from "@/lib/gamification"
 import { Check, Lock, Star } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
@@ -10,7 +10,22 @@ interface BadgeShowcaseProps {
   earnedBadges: UserBadgeType[]
 }
 
-export default function BadgeShowcase({ currentXp, earnedBadges }: BadgeShowcaseProps) {
+export default function BadgeShowcase({ currentXp = 0, earnedBadges = [] }: BadgeShowcaseProps) {
+  // Ensure we have valid badge configuration
+  if (!allBadgesConfig || !Array.isArray(allBadgesConfig) || allBadgesConfig.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Your Badges & Achievements</CardTitle>
+          <CardDescription>Badge system is currently unavailable.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Unable to load badge information at this time.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const earnedBadgeNames = earnedBadges.map((b) => b.name)
   const nextBadgeToEarn = getNextBadge(currentXp)
 
@@ -18,7 +33,7 @@ export default function BadgeShowcase({ currentXp, earnedBadges }: BadgeShowcase
     <Card>
       <CardHeader>
         <CardTitle>Your Badges & Achievements</CardTitle>
-        <CardDescription>Track your progress and see what you can unlock next.</CardDescription>
+        <CardDescription>Track your progress and see what you can unlock next. Current XP: {currentXp}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {allBadgesConfig
@@ -33,15 +48,16 @@ export default function BadgeShowcase({ currentXp, earnedBadges }: BadgeShowcase
 
             if (!isEarned) {
               // Find the previous badge to calculate progress from that point
-              const previousBadgeIndex = allBadgesConfig.findIndex((b) => b.threshold === badge.threshold) + 1 // badges are sorted desc by default
-              const previousBadge = allBadgesConfig[previousBadgeIndex] // This might be undefined if it's the first badge
+              const sortedBadges = [...allBadgesConfig].sort((a, b) => a.threshold - b.threshold)
+              const currentBadgeIndex = sortedBadges.findIndex((b) => b.threshold === badge.threshold)
+              const previousBadge = currentBadgeIndex > 0 ? sortedBadges[currentBadgeIndex - 1] : null
 
               const startingXpForThisBadge = previousBadge ? previousBadge.threshold : 0
-              xpCurrentlyTowardsThis = currentXp - startingXpForThisBadge
+              xpCurrentlyTowardsThis = Math.max(0, currentXp - startingXpForThisBadge)
               xpNeededForThis = badge.threshold - startingXpForThisBadge
               progressToThisBadge = xpNeededForThis > 0 ? (xpCurrentlyTowardsThis / xpNeededForThis) * 100 : 0
-              if (progressToThisBadge < 0) progressToThisBadge = 0 // Ensure progress isn't negative
-              if (progressToThisBadge > 100) progressToThisBadge = 100 // Cap at 100 if somehow over
+              if (progressToThisBadge < 0) progressToThisBadge = 0
+              if (progressToThisBadge > 100) progressToThisBadge = 100
             }
 
             return (

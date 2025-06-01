@@ -8,18 +8,18 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Zap, Briefcase, BarChart2, Code, Users, Settings2, CheckCircle } from "lucide-react"
 import { setSelectedAgent } from "@/app/dashboard/agents/manage/actions"
 import { toast } from "@/hooks/use-toast"
+import AgentDeleteDialog from "./agent-delete-dialog"
+import type { Agent } from "@/types/agent" // Declare the Agent variable
 
-export interface Agent {
-  id: string
-  name: string | null
-  template_slug: string | null
-  goal: string | null
-  status: string | null
-  created_at: string
+// Add this interface to include task counts
+export interface AgentWithCounts extends Agent {
+  task_count?: number
+  dependency_count?: number
 }
 
+// Update the props interface
 interface AgentSelectionCardProps {
-  agent: Agent
+  agent: AgentWithCounts
   isSelected: boolean
 }
 
@@ -90,11 +90,21 @@ export default function AgentSelectionCard({ agent, isSelected }: AgentSelection
         </div>
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
-        <Button asChild variant="outline" className="w-full">
-          <a href={`/dashboard/agents/${agent.id}`}>
-            View Details <ArrowRight className="ml-2 h-4 w-4" />
-          </a>
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button asChild variant="outline" className="flex-1">
+            <a href={`/dashboard/agents/${agent.id}`}>
+              View Details <ArrowRight className="ml-2 h-4 w-4" />
+            </a>
+          </Button>
+          <AgentDeleteDialog
+            agentId={agent.id}
+            agentName={agent.name || "Unnamed Agent"}
+            agentStatus={agent.status || undefined}
+            taskCount={agent.task_count || 0}
+            dependencyCount={agent.dependency_count || 0}
+            variant="icon"
+          />
+        </div>
         <Button
           onClick={handleSelectAgent}
           disabled={isSelected || isPending}

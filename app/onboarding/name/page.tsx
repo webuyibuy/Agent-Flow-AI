@@ -1,54 +1,111 @@
+import { Suspense } from "react"
 import { getSupabaseFromServer } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import NameOnboardingForm from "@/components/name-onboarding-form"
-import { Suspense } from "react"
+import { ProductionDatabase } from "@/lib/production-database"
+import { DatabaseHealthMonitor } from "@/lib/database-health-monitor"
+import EnhancedOnboardingFlow from "@/components/enhanced-onboarding-flow"
+import { Loader2, AlertTriangle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-async function UserProfileFetcher() {
+async function OnboardingChecker() {
   const supabase = getSupabaseFromServer()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const db = ProductionDatabase.getInstance()
+  const healthMonitor = DatabaseHealthMonitor.getInstance()
 
-  if (userError || !user) {
-    redirect("/login")
+  try {
+    // Check database health first
+    const dbHealth = await healthMonitor.checkDatabaseHealth()
+    if (!dbHealth.healthy) {
+      console.error("Database health check failed:", dbHealth.issues)
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Alert className="max-w-md">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              We're experiencing technical difficulties. Please try again in a few moments.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )
+    }
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      console.log("No authenticated user found, redirecting to login")
+      redirect("/login")
+    }
+
+    // Get user profile with enhanced error handling
+    const profile = await db.getUserProfile(user.id)
+
+    // Track user activity
+    await db.trackUserActivity(user.id, "onboarding_name_page_visit", "onboarding", undefined, {
+      timestamp: new Date().toISOString(),
+      userAgent: "server-side",
+    })
+
+    // Check onboarding progress
+    if (profile?.onboarding_step && profile.onboarding_step > 1) {
+      if (profile.onboarding_completed) {
+        redirect("/dashboard")
+      } else {
+        redirect("/onboarding/general-agent")
+      }
+    }
+
+    return <EnhancedOnboardingFlow user={user} profile={profile} />
+  } catch (error) {
+    console.error("Critical error in OnboardingChecker:", error)
+
+    // Log the error for monitoring
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        await db.trackUserActivity(user.id, "onboarding_error", "error", undefined, {
+          error: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString(),
+        })
+      }
+    } catch (logError) {
+      console.error("Failed to log error:", logError)
+    }
+
+    // Return error fallback UI
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Alert className="max-w-md">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Something went wrong during setup. Please refresh the page or contact support if the issue persists.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
-    .single()
-
-  // If profile fetch fails critically (not just not found, which shouldn't happen after callback)
-  if (profileError && profileError.code !== "PGRST116") {
-    console.error("Error fetching profile for onboarding:", profileError)
-    // Redirect to login or an error page might be better
-    redirect("/login?message=Error fetching profile")
-  }
-
-  // If display name is already set, they might have manually navigated here.
-  // Redirect them to the next step or dashboard.
-  if (profile?.display_name) {
-    // Assuming next step is goal primer, or dashboard if all onboarding is done.
-    redirect("/onboarding/goal-primer") // Or /dashboard if this was the last step
-  }
-
-  return <NameOnboardingForm currentName={profile?.display_name} />
 }
 
-export default async function OnboardingNamePage() {
+export default function NameOnboardingPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      <Suspense
-        fallback={
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <p>Loading your space...</p>
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Preparing your onboarding experience...</p>
           </div>
-        }
-      >
-        <UserProfileFetcher />
-      </Suspense>
-    </div>
+        </div>
+      }
+    >
+      <OnboardingChecker />
+    </Suspense>
   )
 }

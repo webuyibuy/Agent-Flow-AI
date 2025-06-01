@@ -9,10 +9,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Check, Trash2, X } from "lucide-react"
+import { BellIcon, CheckIcon, Trash2Icon, XIcon } from "lucide-react"
 import Link from "next/link"
 import {
   fetchNotifications,
@@ -23,24 +22,25 @@ import {
 import type { Notification } from "@/lib/notifications"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { getSupabaseBrowserClient } from "@/lib/supabase/client" // For real-time
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { motion, AnimatePresence } from "framer-motion"
 
 function getNotificationIcon(type: Notification["type"]) {
   switch (type) {
     case "success":
     case "task_complete":
-      return <Check className="h-4 w-4 text-green-500" />
+      return <CheckIcon className="h-4 w-4 text-[#34c759]" />
     case "warning":
-      return <Bell className="h-4 w-4 text-yellow-500" />
+      return <BellIcon className="h-4 w-4 text-[#ff9f0a]" />
     case "error":
-      return <X className="h-4 w-4 text-red-500" />
+      return <XIcon className="h-4 w-4 text-[#ff3b30]" />
     case "agent_update":
-      return <Bell className="h-4 w-4 text-blue-500" />
+      return <BellIcon className="h-4 w-4 text-[#5ac8fa]" />
     case "dependency_ready":
-      return <Bell className="h-4 w-4 text-orange-500" />
+      return <BellIcon className="h-4 w-4 text-[#ff9f0a]" />
     case "info":
     default:
-      return <Bell className="h-4 w-4 text-gray-500" />
+      return <BellIcon className="h-4 w-4 text-[#8e8e93]" />
   }
 }
 
@@ -49,6 +49,7 @@ export default function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
   const supabase = getSupabaseBrowserClient()
 
@@ -128,29 +129,47 @@ export default function NotificationCenter() {
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative rounded-full">
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 min-w-5 justify-center rounded-full p-0 text-xs"
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </Badge>
-          )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative rounded-full h-10 w-10 flex items-center justify-center"
+        >
+          <motion.div whileTap={{ scale: 0.9 }} transition={{ duration: 0.2 }}>
+            <BellIcon className="h-5 w-5" />
+            <AnimatePresence>
+              {unreadCount > 0 && (
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  className="absolute -top-1 -right-1"
+                >
+                  <Badge
+                    variant="destructive"
+                    className="h-5 w-5 min-w-5 flex items-center justify-center rounded-full p-0 text-xs"
+                  >
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Badge>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
           <span className="sr-only">Open notifications</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 md:w-96">
-        <DropdownMenuLabel className="flex items-center justify-between">
-          <span>Notifications</span>
+      <DropdownMenuContent
+        align="end"
+        className="w-80 md:w-96 rounded-xl border border-[#e5e5ea] bg-white/95 backdrop-blur-xl p-0 shadow-lg dark:border-[#3a3a3c] dark:bg-[#2c2c2e]/95"
+      >
+        <DropdownMenuLabel className="flex items-center justify-between p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+          <span className="text-base font-medium">Notifications</span>
           {notifications.length > 0 && !isLoading && (
             <Button
-              variant="link"
+              variant="ghost"
               size="sm"
-              className="p-0 h-auto"
+              className="h-8 px-2 text-[#0071e3] hover:text-[#0077ED] dark:text-[#0091ff]"
               onClick={handleMarkAllAsRead}
               disabled={isPending || unreadCount === 0}
             >
@@ -158,85 +177,106 @@ export default function NotificationCenter() {
             </Button>
           )}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+
         {isLoading && notifications.length === 0 ? (
-          <DropdownMenuItem disabled className="justify-center py-4">
-            Loading notifications...
-          </DropdownMenuItem>
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin h-6 w-6 border-2 border-[#0071e3] border-t-transparent rounded-full"></div>
+          </div>
         ) : notifications.length === 0 ? (
-          <DropdownMenuItem disabled className="justify-center py-4">
-            No new notifications
-          </DropdownMenuItem>
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div className="h-16 w-16 rounded-full bg-[#f2f2f7] dark:bg-[#3a3a3c] flex items-center justify-center mb-4">
+              <BellIcon className="h-8 w-8 text-[#8e8e93] dark:text-[#aeaeb2]" />
+            </div>
+            <p className="text-[#1c1c1e] dark:text-white font-medium">No notifications</p>
+            <p className="text-sm text-[#8e8e93] dark:text-[#aeaeb2] mt-1">
+              You're all caught up! New notifications will appear here.
+            </p>
+          </div>
         ) : (
-          <ScrollArea className="h-[300px] md:h-[400px]">
-            {notifications.map((notification) => (
-              <DropdownMenuItem
-                key={notification.id}
-                className={cn(
-                  "flex items-start gap-3 p-3 hover:bg-muted/50 data-[highlighted]:bg-muted/80",
-                  !notification.is_read && "bg-primary/5 font-medium",
-                )}
-                onSelect={(e) => e.preventDefault()} // Prevent closing on item click
-              >
-                <div className="mt-1 shrink-0">{getNotificationIcon(notification.type)}</div>
-                <div className="flex-grow">
-                  <p className="text-sm font-semibold">{notification.title}</p>
-                  <p className="text-xs text-muted-foreground">{notification.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(notification.created_at).toLocaleString()}
-                  </p>
-                  {notification.action_url && (
-                    <Link href={notification.action_url} passHref legacyBehavior>
-                      <a
-                        className="text-xs text-blue-500 hover:underline mt-1 block"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        View Details
-                      </a>
-                    </Link>
-                  )}
-                </div>
-                <div className="flex flex-col items-end space-y-1 shrink-0">
-                  {!notification.is_read && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleMarkAsRead(notification.id)
-                      }}
-                      disabled={isPending}
-                      title="Mark as read"
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteNotification(notification.id)
-                    }}
-                    disabled={isPending}
-                    title="Delete notification"
+          <ScrollArea className="h-[400px] md:h-[500px]">
+            <AnimatePresence initial={false}>
+              {notifications.map((notification) => (
+                <motion.div
+                  key={notification.id}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <DropdownMenuItem
+                    className={cn(
+                      "flex items-start gap-3 p-4 hover:bg-[#f2f2f7] data-[highlighted]:bg-[#f2f2f7] border-b border-[#e5e5ea] dark:border-[#3a3a3c] dark:hover:bg-[#3a3a3c] dark:data-[highlighted]:bg-[#3a3a3c]",
+                      !notification.is_read && "bg-[#e1f0ff] dark:bg-[#0d253a]",
+                    )}
+                    onSelect={(e) => e.preventDefault()} // Prevent closing on item click
                   >
-                    <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
-                  </Button>
-                </div>
-              </DropdownMenuItem>
-            ))}
+                    <div className="mt-1 shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-[#f2f2f7] dark:bg-[#3a3a3c] flex items-center justify-center">
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                    </div>
+                    <div className="flex-grow">
+                      <p className="text-sm font-semibold text-[#1c1c1e] dark:text-white">{notification.title}</p>
+                      <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2] mt-1">{notification.message}</p>
+                      <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2] mt-2">
+                        {new Date(notification.created_at).toLocaleString()}
+                      </p>
+                      {notification.action_url && (
+                        <Link href={notification.action_url} passHref legacyBehavior>
+                          <a
+                            className="text-xs text-[#0071e3] hover:underline mt-2 inline-block dark:text-[#0091ff]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View Details
+                          </a>
+                        </Link>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end space-y-2 shrink-0">
+                      {!notification.is_read && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 rounded-full"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleMarkAsRead(notification.id)
+                          }}
+                          disabled={isPending}
+                          title="Mark as read"
+                        >
+                          <CheckIcon className="h-4 w-4 text-[#34c759]" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 rounded-full"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteNotification(notification.id)
+                        }}
+                        disabled={isPending}
+                        title="Delete notification"
+                      >
+                        <Trash2Icon className="h-4 w-4 text-[#ff3b30]" />
+                      </Button>
+                    </div>
+                  </DropdownMenuItem>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </ScrollArea>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="justify-center" asChild>
-          {/* TODO: Link to a dedicated notifications page */}
-          <Link href="/dashboard/notifications" className="text-sm text-blue-500 hover:underline">
+
+        <div className="p-4 border-t border-[#e5e5ea] dark:border-[#3a3a3c] text-center">
+          <Link
+            href="/dashboard/notifications"
+            className="text-sm text-[#0071e3] hover:text-[#0077ED] dark:text-[#0091ff]"
+          >
             View all notifications
           </Link>
-        </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   )

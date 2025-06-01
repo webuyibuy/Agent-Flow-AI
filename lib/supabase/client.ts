@@ -1,23 +1,44 @@
 import { createBrowserClient } from "@supabase/ssr"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { ConnectionManager } from "./connection-manager"
 
-// Define a global variable to store the client instance
-declare global {
-  // eslint-disable-next-line no-var
-  var supabaseClient: SupabaseClient | undefined
+let supabaseClient: SupabaseClient | null = null
+
+export function getSupabaseBrowserClient(): SupabaseClient {
+  // Return existing client if available
+  if (supabaseClient) {
+    return supabaseClient
+  }
+
+  const connectionManager = ConnectionManager.getInstance()
+
+  if (!connectionManager.isConfigured()) {
+    console.log("🔄 Using mock Supabase browser client - environment not configured")
+    supabaseClient = connectionManager.getMockClient()
+    return supabaseClient
+  }
+
+  try {
+    const config = connectionManager.getConfig()
+
+    supabaseClient = createBrowserClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
+
+    console.log("✅ Real Supabase browser client initialized")
+    return supabaseClient
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase browser client:", error)
+    supabaseClient = connectionManager.getMockClient()
+    return supabaseClient
+  }
 }
 
-export function getSupabaseBrowserClient() {
-  if (typeof window === "undefined") {
-    // This function should only be called on the client
-    throw new Error("getSupabaseBrowserClient should only be called on the client side.")
-  }
-
-  if (!globalThis.supabaseClient) {
-    globalThis.supabaseClient = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
-  }
-  return globalThis.supabaseClient
+// Reset client function for testing or when switching environments
+export function resetSupabaseClient() {
+  supabaseClient = null
 }

@@ -1,16 +1,27 @@
-"use client" // Add 'use client' for useState and event handlers
+"use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-// Removed redirect and getSupabaseFromServer as this is now a client component for the layout shell.
-// Data fetching for user/profile will be passed as props or handled by child server components.
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, ListChecks, Settings, PlusCircle, Zap, Menu, BarChart3 } from "lucide-react"
+import {
+  HomeIcon,
+  ListChecksIcon,
+  SettingsIcon,
+  PlusCircleIcon,
+  ZapIcon,
+  MenuIcon,
+  BarChart2Icon,
+  StarIcon,
+  ChevronRightIcon,
+} from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
-import type { Badge as UserBadgeType } from "@/lib/gamification" // Assuming this type is still needed
+import { Badge } from "@/components/ui/badge"
+import type { Badge as UserBadgeType } from "@/lib/gamification"
 import RealtimeStatusIndicator from "@/components/realtime-status-indicator"
 import NotificationCenter from "@/components/notification-center"
+import { motion } from "framer-motion"
+import { ProfileUpdater } from "./profile-updater"
 
 interface NavItem {
   href: string
@@ -19,13 +30,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/dependencies", label: "Dependency Basket", icon: ListChecks },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/settings/profile", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Home", icon: HomeIcon },
+  { href: "/dashboard/dependencies", label: "Dependencies", icon: ListChecksIcon },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2Icon },
+  { href: "/dashboard/settings/profile", label: "Settings", icon: SettingsIcon },
 ]
 
-// Props for the layout, including user data fetched by parent server components
 interface DashboardLayoutProps {
   children: React.ReactNode
   user: {
@@ -40,7 +50,6 @@ interface DashboardLayoutProps {
   newAgentHref: string
 }
 
-// This is now a client component because of useState for mobile nav
 export default function DashboardLayoutClient({
   children,
   user,
@@ -50,98 +59,143 @@ export default function DashboardLayoutClient({
   newAgentHref,
 }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
   const displayName = profile?.display_name || user.email?.split("@")[0] || "User"
   const userEmail = user.email || "No email"
-
   const BadgeIcon = currentBadge?.icon
 
+  // Handle scroll effect for header
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10)
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
   return (
-    <div className="flex min-h-screen w-full bg-gray-100 dark:bg-gray-900">
+    <div className="flex min-h-screen w-full bg-[#f2f2f7] dark:bg-[#1c1c1e]">
+      <ProfileUpdater />
       {/* Desktop Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r bg-white dark:bg-gray-800 sm:flex">
-        <nav className="flex flex-col gap-2 p-4">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#e5e5ea] bg-white/80 backdrop-blur-xl dark:border-[#3a3a3c] dark:bg-[#2c2c2e]/80 sm:flex">
+        <nav className="flex flex-col gap-1 p-4">
           <Link
             href="/dashboard"
-            className="mb-4 flex items-center gap-2 text-lg font-semibold text-[#007AFF]"
+            className="mb-8 flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]"
             prefetch={false}
           >
-            <Zap className="h-7 w-7" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
+              <ZapIcon className="h-6 w-6 text-white" />
+            </div>
             <span>AgentFlow</span>
           </Link>
+
           {navItems.map((item) => (
             <Button
               key={item.label}
               variant="ghost"
-              className="w-full justify-start dark:text-gray-300 dark:hover:bg-gray-700"
+              className="w-full justify-start text-[#1c1c1e] dark:text-white"
               asChild
             >
-              <Link href={item.href} prefetch={false}>
-                <item.icon className="mr-3 h-5 w-5" />
+              <Link href={item.href} prefetch={false} className="flex items-center gap-3 py-3">
+                <item.icon className="h-5 w-5" />
                 {item.label}
+                <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
               </Link>
             </Button>
           ))}
         </nav>
+
         <div className="mt-auto p-4">
-          <Button variant="outline" className="w-full" asChild>
-            <Link href="/dashboard/agents/new">
-              <PlusCircle className="mr-2 h-4 w-4" />
+          <Button variant="filled" size="lg" className="w-full" asChild>
+            <Link href="/dashboard/agents/new" className="flex items-center gap-2">
+              <PlusCircleIcon className="h-5 w-5" />
               New Agent
             </Link>
           </Button>
+        </div>
+
+        {/* User profile section */}
+        <div className="border-t border-[#e5e5ea] p-4 dark:border-[#3a3a3c]">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0071e3] text-white font-medium">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate text-[#1c1c1e] dark:text-white">{displayName}</p>
+              <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2] truncate">{userEmail}</p>
+            </div>
+          </div>
         </div>
       </aside>
 
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-64 w-full">
         {/* Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-white dark:bg-gray-800 px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+        <motion.header
+          className={`sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 transition-all duration-200 ${
+            scrolled
+              ? "bg-white/80 backdrop-blur-xl border-b border-[#e5e5ea] dark:bg-[#1c1c1e]/80 dark:border-[#3a3a3c]"
+              : "bg-transparent"
+          }`}
+          initial={{ y: -10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
           {/* Mobile Nav Trigger */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild className="sm:hidden">
-              <Button size="icon" variant="outline" className="relative">
-                <Menu className="h-5 w-5" />
+              <Button size="icon" variant="ghost" className="relative">
+                <MenuIcon className="h-5 w-5" />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="sm:hidden w-80 p-0 flex flex-col">
-              <SheetHeader className="p-4 border-b bg-white dark:bg-gray-800">
-                <SheetTitle className="flex items-center gap-2 text-lg font-semibold text-[#007AFF]">
-                  <Zap className="h-7 w-7" />
+            <SheetContent
+              side="left"
+              className="sm:hidden w-80 p-0 flex flex-col border-r-0 bg-white/95 backdrop-blur-xl dark:bg-[#1c1c1e]/95"
+            >
+              <SheetHeader className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+                <SheetTitle className="flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
+                    <ZapIcon className="h-6 w-6 text-white" />
+                  </div>
                   <span>AgentFlow</span>
                 </SheetTitle>
               </SheetHeader>
 
               {/* User Info Section */}
-              <div className="p-4 border-b bg-gray-50 dark:bg-gray-800/50">
+              <div className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
                 <div className="flex items-center gap-3">
-                  {BadgeIcon && (
-                    <div className="p-2 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                      <BadgeIcon className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                    </div>
-                  )}
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0071e3] text-white text-lg font-medium">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-800 dark:text-gray-200">{displayName}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{totalXp} XP</p>
-                    {currentBadge && (
-                      <p className="text-xs text-orange-600 dark:text-orange-400">{currentBadge.name}</p>
-                    )}
+                    <p className="font-medium text-[#1c1c1e] dark:text-white">{displayName}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="tinted" size="pill" className="flex items-center gap-1">
+                        <StarIcon className="h-3 w-3" />
+                        {totalXp} XP
+                      </Badge>
+                      {currentBadge && (
+                        <Badge variant="secondary" size="pill">
+                          {currentBadge.name}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Navigation Links */}
-              <nav className="flex-1 flex flex-col gap-1 p-4">
+              <nav className="flex-1 flex flex-col gap-1 p-4 overflow-y-auto">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.label + "-mobile"}>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start h-12 text-base dark:text-gray-300 dark:hover:bg-gray-700"
-                      asChild
-                    >
-                      <Link href={item.href} prefetch={false}>
-                        <item.icon className="mr-3 h-5 w-5" />
+                    <Button variant="ghost" className="w-full justify-start h-12 text-base" asChild>
+                      <Link href={item.href} prefetch={false} className="flex items-center gap-3">
+                        <item.icon className="h-5 w-5" />
                         {item.label}
+                        <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
                       </Link>
                     </Button>
                   </SheetClose>
@@ -149,16 +203,16 @@ export default function DashboardLayoutClient({
               </nav>
 
               {/* Action Buttons */}
-              <div className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 space-y-2">
+              <div className="p-4 border-t border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
                 <SheetClose asChild>
-                  <Button className="w-full bg-[#007AFF] hover:bg-[#0056b3] text-white" asChild>
-                    <Link href="/dashboard/agents/new">
-                      <PlusCircle className="mr-2 h-4 w-4" />
+                  <Button variant="filled" size="lg" className="w-full" asChild>
+                    <Link href="/dashboard/agents/new" className="flex items-center gap-2">
+                      <PlusCircleIcon className="h-5 w-5" />
                       Create New Agent
                     </Link>
                   </Button>
                 </SheetClose>
-                <div className="flex justify-center">
+                <div className="flex justify-center mt-4">
                   <RealtimeStatusIndicator />
                 </div>
               </div>
@@ -166,33 +220,45 @@ export default function DashboardLayoutClient({
           </Sheet>
 
           <div className="flex-1 flex items-center justify-between">
-            {/* Desktop User Info */}
+            {/* Desktop User Info with XP Badge */}
             <div className="hidden sm:flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                {BadgeIcon && (
-                  <div className="p-1.5 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                    <BadgeIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0071e3] text-white font-medium">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="font-medium text-[#1c1c1e] dark:text-white">{displayName}</p>
+                    {currentBadge && <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2]">{currentBadge.name}</p>}
                   </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{displayName}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {totalXp} XP {currentBadge && `• ${currentBadge.name}`}
-                  </p>
+                  {/* XP Badge positioned next to user name */}
+                  <Badge variant="tinted" size="pill" className="flex items-center gap-1 px-3 py-1">
+                    <StarIcon className="h-3 w-3" />
+                    {totalXp} XP
+                  </Badge>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <NotificationCenter />
               <RealtimeStatusIndicator />
             </div>
           </div>
-        </header>
+        </motion.header>
 
-        <main className="flex-1 p-4 sm:p-6 bg-gray-50 dark:bg-gray-950 sm:rounded-tl-xl">{children}</main>
-        <footer className="w-full p-4 text-center text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 mt-auto sm:rounded-bl-xl bg-white dark:bg-gray-800">
-          AgentFlow &copy; {new Date().getFullYear()}
+        <main className="flex-1 p-4 sm:p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {children}
+          </motion.div>
+        </main>
+
+        <footer className="w-full p-4 text-center text-xs text-[#8e8e93] dark:text-[#aeaeb2] border-t border-[#e5e5ea] dark:border-[#3a3a3c] mt-auto bg-white/80 backdrop-blur-xl dark:bg-[#2c2c2e]/80">
+          AgentFlow &copy; {new Date().getFullYear()} • Designed for Apple Platforms
         </footer>
       </div>
     </div>

@@ -5,7 +5,7 @@ import type { Metadata } from "next"
 import ApiKeyManager from "@/components/api-key-manager"
 import ProfileSettingsForm from "@/components/profile-settings-form"
 import { Suspense } from "react"
-import BadgeShowcase from "@/components/badge-showcase" // Import the new component
+import BadgeShowcase from "@/components/badge-showcase"
 import { badges as allBadgesConfig, type Badge as UserBadgeType } from "@/lib/gamification"
 
 export const metadata: Metadata = {
@@ -34,26 +34,48 @@ async function BadgeDataFetcher() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    // This case should ideally be handled by page/layout auth guard
     return <p>User not found.</p>
   }
 
-  const { data: xpData, error: xpError } = await supabase.from("xp_log").select("points").eq("owner_id", user.id)
+  try {
+    // Check if xp_logs table exists, if not use xp_log
+    const { data: xpData, error: xpError } = await supabase
+      .from("xp_logs")
+      .select("points_awarded")
+      .eq("user_id", user.id)
 
-  if (xpError) {
-    console.error("Error fetching XP for badge showcase:", xpError.message)
-    return <p>Error loading badge information.</p>
-  }
+    let totalXp = 0
+    if (xpError) {
+      // Try alternative table name
+      const { data: altXpData, error: altXpError } = await supabase
+        .from("xp_log")
+        .select("points")
+        .eq("owner_id", user.id)
 
-  const totalXp = xpData?.reduce((sum, entry) => sum + (entry.points || 0), 0) || 0
-  const earnedBadges: UserBadgeType[] = []
-  for (const badge of allBadgesConfig) {
-    if (totalXp >= badge.threshold) {
-      earnedBadges.push(badge)
+      if (altXpError) {
+        console.error("Error fetching XP for badge showcase:", altXpError.message)
+        totalXp = 0
+      } else {
+        totalXp = altXpData?.reduce((sum, entry) => sum + (entry.points || 0), 0) || 0
+      }
+    } else {
+      totalXp = xpData?.reduce((sum, entry) => sum + (entry.points_awarded || 0), 0) || 0
     }
-  }
 
-  return <BadgeShowcase currentXp={totalXp} earnedBadges={earnedBadges} />
+    const earnedBadges: UserBadgeType[] = []
+    if (allBadgesConfig && Array.isArray(allBadgesConfig)) {
+      for (const badge of allBadgesConfig) {
+        if (totalXp >= badge.threshold) {
+          earnedBadges.push(badge)
+        }
+      }
+    }
+
+    return <BadgeShowcase currentXp={totalXp} earnedBadges={earnedBadges} />
+  } catch (error) {
+    console.error("Error in BadgeDataFetcher:", error)
+    return <BadgeShowcase currentXp={0} earnedBadges={[]} />
+  }
 }
 
 export default async function ProfileSettingsPage() {
@@ -97,6 +119,24 @@ export default async function ProfileSettingsPage() {
         fallback={
           <Card>
             <CardHeader>
+              <CardTitle>API Keys & Model Preferences</CardTitle>
+              <CardDescription>Loading API key management...</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-20 flex items-center justify-center">
+                <p>Loading...</p>
+              </div>
+            </CardContent>
+          </Card>
+        }
+      >
+        <ApiKeyManager />
+      </Suspense>
+
+      <Suspense
+        fallback={
+          <Card>
+            <CardHeader>
               <CardTitle>Your Badges & Achievements</CardTitle>
               <CardDescription>Loading your badge progress...</CardDescription>
             </CardHeader>
@@ -110,8 +150,6 @@ export default async function ProfileSettingsPage() {
       >
         <BadgeDataFetcher />
       </Suspense>
-
-      <ApiKeyManager />
     </div>
   )
 }

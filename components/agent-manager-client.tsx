@@ -1,129 +1,137 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
-import { PlusCircle, Loader2, Zap } from "lucide-react"
+import { useState, useMemo } from "react"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import AgentSelectionCard, { type Agent } from "./agent-selection-card"
-import { clearSelectedAgentCookie } from "@/app/dashboard/agents/manage/actions"
+import AgentSelectionCard, { type AgentWithCounts } from "./agent-selection-card"
+import AgentManagementToolbar from "./agent-management-toolbar"
 import { toast } from "@/hooks/use-toast"
 
 interface AgentManagerClientProps {
-  agents: Agent[]
+  agents: AgentWithCounts[]
   selectedAgentId: string | null
 }
 
-export default function AgentManagerClient({
-  agents,
-  selectedAgentId: initialSelectedAgentId,
-}: AgentManagerClientProps) {
+export default function AgentManagerClient({ agents, selectedAgentId }: AgentManagerClientProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [isClearing, setIsClearing] = useState(false)
-  const [selectedAgentId, setSelectedAgentId] = useState(initialSelectedAgentId)
+  const [sortBy, setSortBy] = useState("created_at_desc")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([])
 
-  const filteredAgents = agents.filter(
-    (agent) =>
-      agent.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.goal?.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  // Filter and sort agents
+  const filteredAndSortedAgents = useMemo(() => {
+    const filtered = agents.filter((agent) => {
+      const matchesSearch =
+        !searchQuery ||
+        agent.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        agent.goal?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        agent.template_slug?.toLowerCase().includes(searchQuery.toLowerCase())
 
-  const handleClearSelection = async () => {
-    setIsClearing(true)
-    try {
-      await clearSelectedAgentCookie()
-      setSelectedAgentId(null) // Update local state immediately
-      toast({
-        title: "Selection Cleared",
-        description: "Your active agent selection has been cleared.",
-      })
-    } catch (error) {
-      console.error("Failed to clear selected agent:", error)
-      toast({
-        title: "Error",
-        description: "Failed to clear agent selection.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsClearing(false)
-    }
+      const matchesStatus = filterStatus === "all" || agent.status === filterStatus
+
+      return matchesSearch && matchesStatus
+    })
+
+    // Sort agents
+    const [field, direction] = sortBy.split("_")
+    filtered.sort((a, b) => {
+      let aVal = a[field as keyof AgentWithCounts]
+      let bVal = b[field as keyof AgentWithCounts]
+
+      if (field === "created_at") {
+        aVal = new Date(aVal as string).getTime()
+        bVal = new Date(bVal as string).getTime()
+      }
+
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        aVal = aVal.toLowerCase()
+        bVal = bVal.toLowerCase()
+      }
+
+      if (direction === "asc") {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0
+      }
+    })
+
+    return filtered
+  }, [agents, searchQuery, sortBy, filterStatus])
+
+  const activeAgents = agents.filter((agent) => agent.status === "active").length
+
+  const handleBulkDelete = () => {
+    if (selectedAgents.length === 0) return
+
+    toast({
+      title: "Bulk Delete",
+      description: `Selected ${selectedAgents.length} agents for deletion. Individual confirmations required.`,
+      variant: "default",
+    })
+
+    // Reset selection after showing message
+    setSelectedAgents([])
   }
 
   return (
-    <main className="flex-1 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Manage Your Agents</h1>
-            <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-              Create new agents or select an active agent for your session.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            {selectedAgentId && (
-              <Button
-                variant="outline"
-                onClick={handleClearSelection}
-                disabled={isClearing}
-                className="w-full sm:w-auto"
-              >
-                {isClearing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Clearing...
-                  </>
-                ) : (
-                  "Clear Active Selection"
-                )}
-              </Button>
-            )}
-            <Button asChild className="bg-[#007AFF] hover:bg-[#0056b3] text-white w-full sm:w-auto">
-              <Link href="/dashboard/agents/new">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create New Agent
-              </Link>
-            </Button>
-          </div>
+    <div className="flex-1 p-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Manage Your Agents</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Create, configure, and manage your AI agents</p>
         </div>
-
-        <div className="mb-6">
-          <Label htmlFor="agent-search" className="sr-only">
-            Search Agents
-          </Label>
-          <Input
-            id="agent-search"
-            type="text"
-            placeholder="Search agents by name or goal..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
-
-        {filteredAgents.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {filteredAgents.map((agent) => (
-              <AgentSelectionCard key={agent.id} agent={agent} isSelected={agent.id === selectedAgentId} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-            <Zap className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400 dark:text-gray-500 mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              {searchQuery ? "No Agents Match Your Search" : "No Agents Created Yet"}
-            </h3>
-            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-4 sm:mb-6 px-4">
-              {searchQuery ? "Try adjusting your search criteria." : "Create your first agent to get started!"}
-            </p>
-            <Button asChild size="lg" className="bg-[#007AFF] hover:bg-[#0056b3] text-white">
-              <Link href="/dashboard/agents/new">
-                <PlusCircle className="mr-2 h-4 w-4 sm:h-5 w-5" />
-                Create New Agent
-              </Link>
-            </Button>
-          </div>
-        )}
+        <Button asChild className="bg-[#007AFF] hover:bg-[#0056b3]">
+          <a href="/dashboard/agents/new">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Agent
+          </a>
+        </Button>
       </div>
-    </main>
+
+      <AgentManagementToolbar
+        totalAgents={agents.length}
+        activeAgents={activeAgents}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        filterStatus={filterStatus}
+        onFilterChange={setFilterStatus}
+        selectedAgents={selectedAgents}
+        onBulkDelete={handleBulkDelete}
+      />
+
+      {filteredAndSortedAgents.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-gray-500 dark:text-gray-400 mb-4">
+            {agents.length === 0 ? (
+              <>
+                <h3 className="text-lg font-medium mb-2">No agents yet</h3>
+                <p>Create your first agent to get started with AI automation.</p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-medium mb-2">No agents match your filters</h3>
+                <p>Try adjusting your search or filter criteria.</p>
+              </>
+            )}
+          </div>
+          {agents.length === 0 && (
+            <Button asChild className="bg-[#007AFF] hover:bg-[#0056b3]">
+              <a href="/dashboard/agents/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Your First Agent
+              </a>
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+          {filteredAndSortedAgents.map((agent) => (
+            <AgentSelectionCard key={agent.id} agent={agent} isSelected={selectedAgentId === agent.id} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

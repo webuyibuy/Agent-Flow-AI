@@ -55,6 +55,57 @@ export function decryptApiKey(encryptedData: EncryptedData): string {
   }
 }
 
+// Simple encrypt/decrypt functions for the new API key system
+export function encrypt(text: string): string {
+  if (!text) {
+    throw new Error("Text cannot be empty")
+  }
+
+  try {
+    const iv = crypto.randomBytes(16)
+    const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY)
+
+    let encrypted = cipher.update(text, "utf8", "hex")
+    encrypted += cipher.final("hex")
+
+    const tag = cipher.getAuthTag()
+
+    // Combine iv, tag, and encrypted data
+    const result = {
+      iv: iv.toString("hex"),
+      tag: tag.toString("hex"),
+      encrypted: encrypted,
+    }
+
+    return JSON.stringify(result)
+  } catch (error) {
+    console.error("Encryption failed:", error)
+    throw new Error("Failed to encrypt data")
+  }
+}
+
+export function decrypt(encryptedText: string): string {
+  if (!encryptedText) {
+    throw new Error("Encrypted text cannot be empty")
+  }
+
+  try {
+    const data = JSON.parse(encryptedText)
+    const { iv, tag, encrypted } = data
+
+    const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY)
+    decipher.setAuthTag(Buffer.from(tag, "hex"))
+
+    let decrypted = decipher.update(encrypted, "hex", "utf8")
+    decrypted += decipher.final("utf8")
+
+    return decrypted
+  } catch (error) {
+    console.error("Decryption failed:", error)
+    throw new Error("Failed to decrypt data")
+  }
+}
+
 // Utility function to check if data is encrypted (has the expected structure)
 export function isEncryptedData(data: any): data is EncryptedData {
   return (
