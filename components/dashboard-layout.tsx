@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
-import { ModeToggle } from "@/components/mode-toggle"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { usePathname } from "next/navigation"
@@ -106,9 +105,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link href="/profile">Edit Profile</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <ModeToggle />
-            </DropdownMenuItem>
             <DropdownMenuItem>
               <Link href="/logout">Logout</Link>
             </DropdownMenuItem>
