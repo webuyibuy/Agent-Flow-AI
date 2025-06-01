@@ -14,19 +14,13 @@ import {
   CheckCircle,
   Circle,
   ArrowRight,
-  MessageSquare,
   Brain,
   Rocket,
   Lightbulb,
   AlertTriangle,
   Loader2,
-  ListChecks,
   ClipboardList,
   Zap,
-  CheckCheck,
-  Settings,
-  Target,
-  TrendingUp,
 } from "lucide-react"
 import type {
   ConfigurationStage,
@@ -43,6 +37,7 @@ import {
   finalizeAndDeployAgent,
 } from "@/app/onboarding/agent-config/systematic-actions"
 import { useRouter } from "next/navigation"
+import ProfessionalAIConsultant from "./professional-ai-consultant"
 
 const phase1Stages: ConfigurationStage[] = [
   {
@@ -119,6 +114,7 @@ const SystematicAgentConfig: React.FC<SystematicAgentConfigProps> = ({ goalPrime
   const [deploying, setDeploying] = useState(false)
   const [deployedAgentId, setDeployedAgentId] = useState<string | null>(null)
   const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus | null>(null)
+  const [agentName, setAgentName] = useState<string>("Systematic Agent") // Example agent name
 
   const [error, setError] = useState<string | null>(null)
 
@@ -379,6 +375,14 @@ const SystematicAgentConfig: React.FC<SystematicAgentConfigProps> = ({ goalPrime
     </div>
   )
 
+  const goToDependencyBasket = () => {
+    router.push("/dashboard/dependencies")
+  }
+
+  const goToAgentDashboard = (agentId: string) => {
+    router.push(`/dashboard/agents/${agentId}`)
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       {/* Progress Header */}
@@ -552,88 +556,15 @@ const SystematicAgentConfig: React.FC<SystematicAgentConfigProps> = ({ goalPrime
                 </Card>
               )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-teal-500" />
-                    AI Strategy Consultant
-                    <Badge variant="outline" className="text-xs">
-                      Real-time Intelligence
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Discuss your plan with our AI expert. Tasks will be automatically generated from our conversation.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="max-h-96 overflow-y-auto space-y-3 p-4 border rounded-lg bg-gray-50 shadow-inner">
-                      {consultationMessages.length === 0 ? (
-                        <p className="text-gray-500 text-center py-4">AI consultant is ready to help...</p>
-                      ) : (
-                        consultationMessages.map((message) => (
-                          <div
-                            key={message.id}
-                            className={`p-3 rounded-lg shadow-xs ${message.role === "user" ? "bg-blue-100 ml-auto max-w-[80%]" : "bg-white mr-auto max-w-[80%]"}`}
-                          >
-                            <div className="font-semibold text-xs mb-1 text-gray-800">
-                              {message.role === "user" ? "You" : "AI Strategy Consultant"}
-                            </div>
-                            <div className="text-xs text-gray-700">{message.content}</div>
-                            {message.relatedQuestions && message.role === "assistant" && (
-                              <div className="mt-2 space-x-1 space-y-1">
-                                {message.relatedQuestions.map((q, index) => (
-                                  <Button
-                                    key={index}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs"
-                                    onClick={() => handleQuickQuestion(q)}
-                                  >
-                                    {q}
-                                  </Button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                      {loadingConsultation && (
-                        <div className="flex items-center gap-2 text-gray-500">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-xs">AI is thinking...</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Textarea
-                        placeholder="Ask about your plan, request changes, or discuss implementation details..."
-                        value={consultationInput}
-                        onChange={(e) => setConsultationInput(e.target.value)}
-                        className="flex-1"
-                        rows={2}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault()
-                            sendConsultationMessage()
-                          }
-                        }}
-                      />
-                      <Button
-                        onClick={sendConsultationMessage}
-                        disabled={!consultationInput.trim() || loadingConsultation}
-                      >
-                        {loadingConsultation ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Send
-                      </Button>
-                    </div>
-                    <div className="flex justify-end pt-4">
-                      <Button onClick={finalizePhase1AndProceedToPhase2} size="lg">
-                        Finalize Plan & Proceed to Deployment (Phase 2) <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              
+<ProfessionalAIConsultant
+  plan={plan}
+  onMessageSent={sendConsultationMessage}
+  messages={consultationMessages}
+  isLoading={loadingConsultation}
+  generatedTasks={generatedTasks}
+  onQuickQuestion={handleQuickQuestion}
+/>
             </div>
           )}
         </>
@@ -714,165 +645,1206 @@ const SystematicAgentConfig: React.FC<SystematicAgentConfigProps> = ({ goalPrime
             </Card>
           ) : (
             // Deployment Success with Status Analysis
-            <div className="space-y-6">
-              <Alert>
-                <CheckCircle className="h-5 w-5" />
-                <AlertTitle>🎉 Deployment Successful!</AlertTitle>
-                <AlertDescription>
-                  Agent deployed successfully! Agent ID: <strong>{deployedAgentId}</strong>
-                </AlertDescription>
-              </Alert>
-
-              {deploymentStatus && (
-                <>
-                  {/* What's Working */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CheckCheck className="h-5 w-5 text-green-500" />✅ What's Working
-                      </CardTitle>
-                      <CardDescription>Systems and components that are operational</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-2">
-                        {deploymentStatus.working.map((item, index) => (
-                          <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
-                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                            <span className="text-xs text-green-800">{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Needs Attention */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Settings className="h-5 w-5 text-orange-500" />🔧 Needs Attention
-                      </CardTitle>
-                      <CardDescription>
-                        Areas that require configuration or completion to optimize performance
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-2">
-                        {deploymentStatus.needsAttention.map((item, index) => (
-                          <div key={index} className="flex items-center gap-2 p-2 bg-orange-50 rounded-lg">
-                            <AlertTriangle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                            <span className="text-xs text-orange-800">{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Dependency Tasks */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <ListChecks className="h-5 w-5 text-blue-500" />📋 Tasks Added to Dependency Basket
-                      </CardTitle>
-                      <CardDescription>
-                        {deploymentStatus.dependencyTasks.length} tasks have been automatically added to help you
-                        complete the setup
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {deploymentStatus.dependencyTasks.map((task) => (
-                          <div key={task.id} className="p-3 border rounded-lg bg-blue-50">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <h5 className="font-medium text-xs text-gray-800">{task.title}</h5>
-                                <p className="text-xs text-gray-600 mt-1">{task.description}</p>
-                                <div className="flex gap-2 mt-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {task.priority} priority
-                                  </Badge>
-                                  <Badge variant="secondary" className="text-xs">
-                                    {task.category}
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Next Steps */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Target className="h-5 w-5 text-purple-500" />🎯 Next Steps
-                      </CardTitle>
-                      <CardDescription>Recommended actions to get the most out of your agent</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-bold text-blue-600">1</span>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-xs">Review Dependency Basket</h4>
-                            <p className="text-xs text-gray-600">
-                              Start with high-priority tasks to unlock your agent's full potential
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-bold text-blue-600">2</span>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-xs">Configure Missing Components</h4>
-                            <p className="text-xs text-gray-600">
-                              Complete the "Needs Attention" items for optimal performance
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-bold text-blue-600">3</span>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-xs">Monitor & Iterate</h4>
-                            <p className="text-xs text-gray-600">
-                              Track progress and refine your agent based on results
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4">
-                    <Button onClick={() => router.push("/dashboard/dependencies")} className="flex-1" size="lg">
-                      <ListChecks className="mr-2 h-4 w-4" />
-                      Go to Dependency Basket
-                    </Button>
-                    <Button
-                      onClick={() => router.push(`/dashboard/agents/${deployedAgentId}`)}
-                      variant="outline"
-                      className="flex-1"
-                      size="lg"
-                    >
-                      <TrendingUp className="mr-2 h-4 w-4" />
-                      View Agent Dashboard
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default SystematicAgentConfig
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            \

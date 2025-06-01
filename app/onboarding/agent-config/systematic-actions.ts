@@ -62,299 +62,262 @@ export async function generateSmartQuestions(
   existingAnswers: UserAnswer[],
 ): Promise<{ success: boolean; questions?: SmartQuestion[]; error?: string }> {
   try {
-    console.log("🚀 Starting smart questions generation...")
+    console.log("🧠 Generating intelligent business-focused questions...")
 
-    // Get a valid user ID that exists in the database
     const profileResult = await profileManager.ensureUserProfile()
     const userId = profileResult.userId || "00000000-0000-0000-0000-000000000000"
 
-    if (profileResult.canContinue) {
-      console.log(`✅ Continuing with user ID: ${userId} (${profileResult.method})`)
-    } else {
-      console.warn(`⚠️ Profile issue but continuing anyway: ${profileResult.error}`)
+    // Use enhanced intelligence system
+    const { EnhancedAgentIntelligence } = await import("@/lib/enhanced-agent-intelligence")
+    const intelligence = EnhancedAgentIntelligence.getInstance()
+
+    const result = await intelligence.generateIntelligentQuestions(goalPrimer, existingAnswers, userId)
+
+    if (result.success && result.questions) {
+      // Convert IntelligentQuestion to SmartQuestion format
+      const smartQuestions: SmartQuestion[] = result.questions.map((q) => ({
+        id: q.id,
+        question: q.question,
+        type: q.type,
+        category: q.category,
+        priority: q.priority === "critical" ? "high" : q.priority,
+        validation: { required: q.priority === "critical" },
+        context: q.reasoning,
+        options: q.options,
+      }))
+
+      return { success: true, questions: smartQuestions }
     }
 
-    console.log("🔄 Getting LLM provider...")
-    const llmProvider = await getUserLLMProvider(userId)
-
-    if (!llmProvider) {
-      console.log("📝 No LLM provider, using fallback questions...")
-      // Fallback questions if no LLM available
-      const fallbackQuestions: SmartQuestion[] = [
-        {
-          id: "q1_fallback",
-          question: "What is the primary goal you want to achieve with this agent?",
-          type: "text",
-          category: "business",
-          priority: "high",
-          validation: { required: true, minLength: 10 },
-          context: "Understanding your main objective helps us configure the agent effectively.",
-        },
-        {
-          id: "q2_fallback",
-          question: "What is your timeline for seeing initial results?",
-          type: "select",
-          options: ["Within 1 week", "1-2 weeks", "1 month", "2-3 months", "No rush, focus on quality"],
-          category: "business",
-          priority: "high",
-          context: "Timeline expectations help us prioritize features and set realistic milestones.",
-        },
-        {
-          id: "q3_fallback",
-          question: "Which resources are readily available for this project?",
-          type: "multiselect",
-          options: ["Development team", "Allocated budget", "API access", "Data sources", "Subject matter experts"],
-          category: "technical",
-          priority: "medium",
-          context: "Understanding available resources helps us plan the implementation approach.",
-        },
-        {
-          id: "q4_fallback",
-          question: "What level of automation do you want to achieve?",
-          type: "select",
-          options: ["Fully automated", "Semi-automated with human oversight", "Human-in-the-loop", "Advisory only"],
-          category: "technical",
-          priority: "medium",
-          context: "Automation level determines the agent's decision-making authority.",
-        },
-      ]
-      console.log("✅ Returning fallback questions")
-      return { success: true, questions: fallbackQuestions }
-    }
-
-    console.log("🤖 Generating questions with LLM...")
-    const prompt = `Based on this goal: "${goalPrimer}"
-And existing answers: ${JSON.stringify(existingAnswers)}
-
-Generate 3-5 smart, strategic questions to understand the user's needs better.
-Focus on business objectives, technical requirements, and implementation constraints.
-
-IMPORTANT: Return ONLY a valid JSON array, no markdown formatting, no code blocks.
-
-Return exactly this JSON structure:
-[{
-  "id": "unique_id_string",
-  "question": "Strategic question text",
-  "type": "text",
-  "category": "business",
-  "priority": "high",
-  "validation": {"required": true, "minLength": 10},
-  "context": "Brief explanation of why this question matters"
-}]
-
-Make sure the response is pure JSON without any markdown formatting.`
-
-    const response = await llmProvider.generateText({
-      prompt,
-      maxTokens: 2000,
-      temperature: 0.7,
-    })
-
-    console.log("📥 Raw LLM response received")
-
-    const questions = parseJSONFromLLMResponse(response) as SmartQuestion[]
-
-    // Validate the questions structure
-    if (!Array.isArray(questions)) {
-      throw new Error("Response is not an array")
-    }
-
-    // Ensure each question has required fields
-    const validatedQuestions = questions.map((q, index) => ({
-      id: q.id || `q${index + 1}_${Date.now()}`,
-      question: q.question || "What would you like to configure?",
-      type: q.type || "text",
-      category: q.category || "business",
-      priority: q.priority || "medium",
-      validation: q.validation || { required: true },
-      context: q.context || "This helps us understand your requirements better.",
-      options: q.options || undefined,
-    }))
-
-    console.log(`✅ Generated ${validatedQuestions.length} validated questions`)
-    return { success: true, questions: validatedQuestions }
+    return result
   } catch (error) {
-    console.error("❌ Error generating questions, using fallback:", error)
-
-    // Return fallback questions on any error
-    const fallbackQuestions: SmartQuestion[] = [
-      {
-        id: "fallback_goal",
-        question: "What is the main objective you want this agent to accomplish?",
-        type: "text",
-        category: "business",
-        priority: "high",
-        validation: { required: true, minLength: 15 },
-        context: "A clear goal helps us configure the agent to meet your specific needs.",
-      },
-      {
-        id: "fallback_timeline",
-        question: "When do you need to see initial results from this agent?",
-        type: "select",
-        options: ["ASAP (1-2 weeks)", "Within a month", "2-3 months", "No specific timeline"],
-        category: "business",
-        priority: "high",
-        context: "Timeline helps us prioritize features and set realistic expectations.",
-      },
-      {
-        id: "fallback_complexity",
-        question: "How would you describe the complexity of your requirements?",
-        type: "select",
-        options: [
-          "Simple and straightforward",
-          "Moderate complexity",
-          "Complex with multiple integrations",
-          "Very complex enterprise needs",
-        ],
-        category: "technical",
-        priority: "medium",
-        context: "Understanding complexity helps us plan the right approach and resources.",
-      },
-      {
-        id: "fallback_priority",
-        question: "What is your top priority for this agent?",
-        type: "select",
-        options: ["Speed of delivery", "Quality and reliability", "Cost effectiveness", "Scalability"],
-        category: "business",
-        priority: "high",
-        context: "Priority helps us focus on what matters most to your success.",
-      },
-    ]
-
-    console.log("✅ Returning fallback questions due to error")
+    console.error("❌ Error generating intelligent questions:", error)
     return {
       success: true,
-      questions: fallbackQuestions,
+      questions: getFallbackBusinessQuestions(),
       error: `Used fallback questions due to: ${error instanceof Error ? error.message : "Unknown error"}`,
     }
   }
+}
+
+function getFallbackBusinessQuestions(): SmartQuestion[] {
+  return [
+    {
+      id: "business_problem_core",
+      question: "What specific business problem or opportunity is driving this AI agent implementation?",
+      type: "text",
+      category: "business",
+      priority: "high",
+      validation: { required: true, minLength: 20 },
+      context: "Understanding the core business driver ensures the agent delivers real value and ROI.",
+    },
+    {
+      id: "success_measurement_kpis",
+      question: "How will you measure the success of this AI agent in your business?",
+      type: "multiselect",
+      category: "business",
+      priority: "high",
+      options: [
+        "Cost reduction (specify target %)",
+        "Time savings (specify hours/week)",
+        "Revenue increase (specify target)",
+        "Customer satisfaction improvement",
+        "Process efficiency gains",
+        "Error reduction",
+        "Employee productivity boost",
+        "Compliance improvement",
+        "Other (please specify)",
+      ],
+      context: "Clear success metrics ensure the agent delivers measurable business value.",
+    },
+    {
+      id: "stakeholder_ecosystem",
+      question: "Who are the key stakeholders that will be affected by this AI agent?",
+      type: "multiselect",
+      category: "business",
+      priority: "high",
+      options: [
+        "End customers",
+        "Internal employees",
+        "Management team",
+        "IT department",
+        "Sales team",
+        "Customer service team",
+        "Operations team",
+        "External partners",
+        "Regulatory bodies",
+        "Investors/Board",
+      ],
+      context: "Understanding stakeholder impact helps design appropriate change management and adoption strategies.",
+    },
+    {
+      id: "implementation_constraints_business",
+      question: "What are your main constraints for implementing this AI agent?",
+      type: "multiselect",
+      category: "business",
+      priority: "medium",
+      options: [
+        "Limited budget",
+        "Tight timeline",
+        "Technical expertise gap",
+        "Data privacy/security requirements",
+        "Regulatory compliance needs",
+        "Integration with existing systems",
+        "Change management challenges",
+        "Scalability requirements",
+        "Vendor/technology dependencies",
+      ],
+      context: "Identifying constraints early helps create a realistic implementation plan and avoid common pitfalls.",
+    },
+  ]
 }
 
 export async function submitAnswersAndGeneratePlan(
   answers: UserAnswer[],
 ): Promise<{ success: boolean; plan?: GeneratedPlan; error?: string }> {
   try {
-    console.log("🚀 Starting plan generation...")
+    console.log("🚀 Starting business-focused plan generation...")
 
-    // Get a valid user ID
     const profileResult = await profileManager.ensureUserProfile()
     const userId = profileResult.userId || "00000000-0000-0000-0000-000000000000"
 
-    const llmProvider = await getUserLLMProvider(userId)
+    // Use enhanced intelligence for business-focused planning
+    const { EnhancedAgentIntelligence } = await import("@/lib/enhanced-agent-intelligence")
+    const intelligence = EnhancedAgentIntelligence.getInstance()
 
-    if (!llmProvider) {
-      console.log("📋 No LLM provider, using fallback plan...")
-      // Fallback plan
-      const fallbackPlan: GeneratedPlan = {
-        id: `plan_${Date.now()}`,
-        title: "Strategic Implementation Plan",
-        description:
-          "A comprehensive plan based on your requirements, designed for systematic execution and measurable results.",
-        objectives: [
-          "Achieve the primary agent goal as defined in your requirements",
-          "Implement a minimum viable product (MVP) within the specified timeline",
-          "Establish monitoring and feedback systems for continuous improvement",
-        ],
-        dependencies: [],
-        resources: [
-          {
-            type: "api_key",
-            name: "LLM Provider API",
-            provider: "OpenAI/Anthropic/etc",
-            required: true,
-            configured: false,
-            description: "Required for AI-powered agent capabilities",
-          },
-        ],
-        timeline: [
-          {
-            phase: "Planning & Setup",
-            duration: "1 week",
-            tasks: ["Finalize requirements", "Set up development environment", "Configure initial agent"],
-            dependencies: [],
-            deliverables: ["Requirements document", "Development environment", "Basic agent configuration"],
-            riskLevel: "low",
-          },
-          {
-            phase: "Development & Testing",
-            duration: "2-3 weeks",
-            tasks: ["Implement core features", "Test functionality", "Gather initial feedback"],
-            dependencies: ["Planning & Setup"],
-            deliverables: ["Working agent MVP", "Test results", "Initial feedback report"],
-            riskLevel: "medium",
-          },
-        ],
-        risks: ["Timeline constraints", "Resource availability", "Integration complexity"],
-        successMetrics: ["Goal achievement rate", "User satisfaction score", "Performance metrics"],
-        complexity: "medium",
-        estimatedTimeToValue: "2-4 weeks",
-      }
-      console.log("✅ Returning fallback plan")
-      return { success: true, plan: fallbackPlan }
+    // Analyze business context from answers
+    const context = intelligence.analyzeBusinessContext
+      ? intelligence.analyzeBusinessContext(answers)
+      : { businessGoals: [], currentChallenges: [], timeline: "not_specified" }
+
+    const result = await intelligence.generateBusinessFocusedPlan(answers, context, userId)
+
+    if (result.success && result.plan) {
+      return result
     }
 
-    console.log("🤖 Generating plan with LLM...")
-    const prompt = `Based on these user answers: ${JSON.stringify(answers)}
-
-Create a comprehensive strategic plan for implementing their AI agent.
-
-IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks.
-
-Return exactly this JSON structure:
-{
-  "id": "unique_plan_id",
-  "title": "Plan Title",
-  "description": "Detailed plan description",
-  "objectives": ["objective1", "objective2", "objective3"],
-  "dependencies": [],
-  "resources": [{"type": "api_key", "name": "Resource Name", "provider": "Provider", "required": true, "configured": false, "description": "Resource description"}],
-  "timeline": [{"phase": "Phase Name", "duration": "timeframe", "tasks": ["task1", "task2"], "dependencies": [], "deliverables": ["deliverable1"], "riskLevel": "low"}],
-  "risks": ["risk1", "risk2"],
-  "successMetrics": ["metric1", "metric2"],
-  "complexity": "medium",
-  "estimatedTimeToValue": "timeframe"
+    // Enhanced fallback with business focus
+    return getFallbackBusinessPlan(answers)
+  } catch (error) {
+    console.error("❌ Error generating business plan:", error)
+    return getFallbackBusinessPlan(answers)
+  }
 }
 
-Make sure the response is pure JSON without any markdown formatting.`
+function getFallbackBusinessPlan(answers: UserAnswer[]): { success: boolean; plan: GeneratedPlan } {
+  // Extract business context from answers
+  const businessProblem =
+    answers.find((a) => a.questionId.includes("business_problem"))?.answer || "Business optimization"
+  const successMetrics = answers.find((a) => a.questionId.includes("success_measurement"))?.answer || []
+  const stakeholders = answers.find((a) => a.questionId.includes("stakeholder"))?.answer || []
 
-    const response = await llmProvider.generateText({
-      prompt,
-      maxTokens: 3000,
-      temperature: 0.6,
-    })
-
-    console.log("📥 Raw plan response received")
-
-    const plan = parseJSONFromLLMResponse(response) as GeneratedPlan
-
-    // Validate and ensure required fields
-    const validatedPlan: GeneratedPlan = {
-      id: plan.id || `plan_${Date.now()}`,
-      title: plan.title || "Strategic Implementation Plan",
-      description: plan.description || "A comprehensive plan based on your requirements",
-      objectives: Array.isArray(plan.objectives)
-        ? plan.objectives
-        : ["Achieve primary goals", "Implement solution", "Monitor progress"],
-      dependencies: Array.isArray(plan.dependencies) ? plan.dependencies : [],
-      resources: Array.isArray(plan.resources) ? plan.resources : [],
-      timeline: Array.isArray(plan.timeline) ? plan.timeline : [],
-      risks: Array.isArray(plan.risks) ? plan.risks : ["Timeline constraints", "Resource availability"],
-      successMetrics: Array.isArray(plan.successMetrics)
-        ? plan.successMetrics
-        : ["Goal achievement", "User satisfaction"],
-      complexity: plan.complexity || "medium",
-      estimatedTimeToValue: plan.estimatedTimeToValue || "2-4 weeks",
-    }
-
-    console.log("✅ Plan generated and validated successfully")
-    return { success: true, plan: validatedPlan }
-  } catch (error) {
-    console.error("❌ Error generating plan:", error)
-    return {
-      success: false,
-      error: `Failed to generate plan: ${error instanceof Error ? error.message : "Unknown error"}`,
-    }
+  const plan: GeneratedPlan = {
+    id: `business_plan_${Date.now()}`,
+    title: "Strategic AI Agent Implementation Plan",
+    description: `Business-focused implementation plan to address: ${businessProblem}`,
+    objectives: [
+      "Solve the identified business problem with measurable impact",
+      "Deliver positive ROI within the specified timeframe",
+      "Ensure smooth stakeholder adoption and change management",
+      "Establish scalable foundation for future AI initiatives",
+    ],
+    dependencies: [],
+    resources: [
+      {
+        type: "business_sponsor",
+        name: "Executive Sponsor",
+        provider: "Internal",
+        required: true,
+        configured: false,
+        description: "Senior leader to champion the initiative and remove obstacles",
+      },
+      {
+        type: "change_management",
+        name: "Change Management Plan",
+        provider: "Internal",
+        required: true,
+        configured: false,
+        description: "Strategy for stakeholder communication and adoption",
+      },
+      {
+        type: "success_tracking",
+        name: "KPI Tracking System",
+        provider: "Internal/External",
+        required: true,
+        configured: false,
+        description: "System to measure and track business success metrics",
+      },
+    ],
+    timeline: [
+      {
+        phase: "Business Foundation & Alignment",
+        duration: "1-2 weeks",
+        tasks: [
+          "Stakeholder alignment sessions",
+          "Success criteria definition",
+          "Resource allocation and team setup",
+          "Risk assessment and mitigation planning",
+        ],
+        dependencies: [],
+        deliverables: [
+          "Stakeholder buy-in documentation",
+          "Clear success metrics and KPIs",
+          "Project charter and resource plan",
+          "Risk register and mitigation strategies",
+        ],
+        riskLevel: "low",
+      },
+      {
+        phase: "MVP Development & Testing",
+        duration: "2-4 weeks",
+        tasks: [
+          "Core functionality development",
+          "Business process integration",
+          "Stakeholder feedback incorporation",
+          "Performance optimization",
+        ],
+        dependencies: ["Business Foundation & Alignment"],
+        deliverables: [
+          "Working MVP with core features",
+          "Integration with existing systems",
+          "User acceptance test results",
+          "Performance benchmarks",
+        ],
+        riskLevel: "medium",
+      },
+      {
+        phase: "Business Deployment & Adoption",
+        duration: "1-2 weeks",
+        tasks: [
+          "Production deployment",
+          "User training and onboarding",
+          "Change management execution",
+          "Performance monitoring setup",
+        ],
+        dependencies: ["MVP Development & Testing"],
+        deliverables: [
+          "Live production system",
+          "Trained user base",
+          "Adoption metrics tracking",
+          "Ongoing support processes",
+        ],
+        riskLevel: "medium",
+      },
+    ],
+    risks: [
+      "Stakeholder resistance to change",
+      "Technical integration complexity",
+      "ROI timeline pressure",
+      "Resource availability constraints",
+    ],
+    successMetrics: Array.isArray(successMetrics)
+      ? successMetrics
+      : ["Business KPI improvement", "User adoption rate", "ROI achievement", "Stakeholder satisfaction score"],
+    complexity: "medium",
+    estimatedTimeToValue: "4-8 weeks",
   }
+
+  return { success: true, plan }
 }
 
 export async function consultWithAI(
@@ -369,69 +332,96 @@ export async function consultWithAI(
   error?: string
 }> {
   try {
-    console.log("🚀 Starting AI consultation...")
+    console.log("🚀 Starting strategic AI consultation...")
 
-    // Get a valid user ID
     const profileResult = await profileManager.ensureUserProfile()
     const userId = profileResult.userId || "00000000-0000-0000-0000-000000000000"
 
     const llmProvider = await getUserLLMProvider(userId)
 
     if (!llmProvider) {
-      console.log("❌ No LLM provider configured")
-      return {
-        success: false,
-        error: "LLM provider not configured. Please add an API key in Settings → Profile → API Keys.",
+      // Enhanced fallback response with business focus
+      const fallbackResponse: AIConsultationMessage = {
+        id: `msg_fallback_${Date.now()}`,
+        role: "assistant",
+        content: `I understand you're asking about: "${userMessage}". While I don't have access to advanced AI capabilities right now, I can offer some strategic guidance:
+
+**Key Considerations:**
+• Focus on measurable business outcomes
+• Identify potential risks and mitigation strategies  
+• Consider stakeholder impact and change management
+• Plan for scalability and future growth
+
+**Recommended Actions:**
+• Define clear success metrics and KPIs
+• Create a stakeholder communication plan
+• Establish regular progress review checkpoints
+• Document lessons learned for future initiatives
+
+Would you like me to help you break this down into specific action items?`,
+        timestamp: new Date(),
+        relatedQuestions: [
+          "What specific business metrics should we track?",
+          "How can we ensure stakeholder buy-in?",
+          "What are the biggest implementation risks?",
+          "How should we measure ROI?",
+        ],
       }
+
+      return { success: true, response: fallbackResponse }
     }
 
-    // Ensure conversationHistory is an array
     const history = Array.isArray(conversationHistory) ? conversationHistory : []
-
-    // Build conversation context
     const conversationContext = history
-      .slice(-5) // Last 5 messages for context
+      .slice(-5)
       .map((msg) => `${msg.role}: ${msg.content}`)
       .join("\n")
 
-    console.log("🤖 Consulting with AI...")
-    const prompt = `You are an expert AI strategy consultant. The user is discussing their implementation plan (ID: ${planId}).
+    const prompt = `You are a senior business strategy consultant specializing in AI implementation. 
+The user is discussing their AI agent implementation plan (ID: ${planId}).
 
-Conversation context:
+**Your Role:**
+- Provide strategic business guidance
+- Focus on ROI and business value
+- Identify risks and opportunities
+- Suggest actionable next steps
+- Ask probing questions to uncover insights
+
+**Conversation Context:**
 ${conversationContext}
 
-User's latest message: "${userMessage}"
+**User's Latest Message:** "${userMessage}"
 
-Provide intelligent, strategic advice and generate actionable tasks.
+**Instructions:**
+Provide intelligent, strategic advice that helps them achieve better business outcomes. 
+Generate specific, actionable tasks when appropriate.
 
-IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks.
-
-Return exactly this JSON structure:
+Return ONLY valid JSON without markdown formatting:
 {
-  "content": "Your strategic response to the user",
-  "relatedQuestions": ["question1", "question2"],
+  "content": "Your strategic response focusing on business value and actionable insights",
+  "relatedQuestions": [
+    "Strategic follow-up question 1",
+    "Strategic follow-up question 2", 
+    "Strategic follow-up question 3"
+  ],
   "generatedTasks": [
     {
       "id": "task_id",
-      "title": "Task title",
-      "description": "Task description",
-      "priority": "medium",
-      "category": "strategy",
+      "title": "Specific actionable task title",
+      "description": "Clear description of what needs to be done and why",
+      "priority": "high|medium|low",
+      "category": "strategy|implementation|measurement|stakeholder_management",
       "requiresApproval": false,
       "estimatedHours": 2
     }
   ]
-}
-
-Make sure the response is pure JSON without any markdown formatting.`
+}`
 
     const response = await llmProvider.generateText({
       prompt,
-      maxTokens: 2000,
+      maxTokens: 2500,
       temperature: 0.7,
     })
-
-    console.log("📥 AI consultation response received")
 
     const aiResponse = parseJSONFromLLMResponse(response)
 
@@ -440,28 +430,34 @@ Make sure the response is pure JSON without any markdown formatting.`
       role: "assistant",
       content:
         aiResponse.content ||
-        "I'm here to help with your implementation plan. What specific aspect would you like to discuss?",
+        "I'm here to help with your strategic planning. What specific aspect would you like to explore?",
       timestamp: new Date(),
-      relatedQuestions: Array.isArray(aiResponse.relatedQuestions) ? aiResponse.relatedQuestions : [],
+      relatedQuestions: Array.isArray(aiResponse.relatedQuestions)
+        ? aiResponse.relatedQuestions
+        : [
+            "What are the key success factors?",
+            "How can we mitigate implementation risks?",
+            "What should be our immediate priorities?",
+          ],
     }
 
-    // Store generated tasks if any
+    // Store generated tasks with business context
     let storedTasks: AgentTask[] = []
     if (aiResponse.generatedTasks && Array.isArray(aiResponse.generatedTasks) && aiResponse.generatedTasks.length > 0) {
-      const taskResult = await storeGeneratedTasks(aiResponse.generatedTasks, userId)
+      const taskResult = await storeBusinessFocusedTasks(aiResponse.generatedTasks, userId, planId)
       if (taskResult.success) {
         storedTasks = taskResult.tasks || []
       }
     }
 
-    console.log("✅ AI consultation completed successfully")
+    console.log("✅ Strategic AI consultation completed successfully")
     return {
       success: true,
       response: consultationMessage,
       generatedTasks: storedTasks,
     }
   } catch (error) {
-    console.error("❌ Error in AI consultation:", error)
+    console.error("❌ Error in strategic consultation:", error)
     return {
       success: false,
       error: `Failed to consult with AI: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -469,43 +465,46 @@ Make sure the response is pure JSON without any markdown formatting.`
   }
 }
 
-async function storeGeneratedTasks(
+async function storeBusinessFocusedTasks(
   tasks: AgentTask[],
   userId: string,
+  planId: string,
 ): Promise<{ success: boolean; tasks?: AgentTask[]; error?: string }> {
   try {
-    console.log(`🔄 Storing ${tasks.length} generated tasks...`)
+    console.log(`🔄 Storing ${tasks.length} business-focused tasks...`)
     const supabase = getSupabaseFromServer()
 
-    // Store tasks as consultation tasks (without agent_id initially)
     const tasksToInsert = tasks.map((task) => ({
-      title: task.title || "Generated Task",
+      title: task.title || "Strategic Task",
       priority: task.priority || "medium",
       status: "todo" as const,
       is_dependency: true,
-      blocked_reason: "Consultation task - needs review",
+      blocked_reason: "Strategic consultation task - requires business review",
       metadata: {
-        description: task.description || "Task generated from AI consultation",
-        category: task.category || "consultation",
+        description: task.description || "Task generated from strategic consultation",
+        category: task.category || "strategy",
         estimatedHours: task.estimatedHours || 2,
         requiresApproval: task.requiresApproval !== undefined ? task.requiresApproval : true,
-        source: "ai_consultation",
+        source: "strategic_consultation",
         consultation_id: `consultation_${Date.now()}`,
+        plan_id: planId,
+        business_focused: true,
+        strategic_priority: task.priority,
       },
     }))
 
     const { data: insertedTasks, error: insertError } = await supabase.from("tasks").insert(tasksToInsert).select("*")
 
     if (insertError) {
-      console.error("❌ Error inserting consultation tasks:", insertError)
+      console.error("❌ Error inserting strategic tasks:", insertError)
       return { success: false, error: insertError.message }
     }
 
-    console.log(`✅ Successfully stored ${insertedTasks?.length || 0} tasks`)
+    console.log(`✅ Successfully stored ${insertedTasks?.length || 0} strategic tasks`)
     return { success: true, tasks: insertedTasks || [] }
   } catch (error) {
-    console.error("❌ Error storing generated tasks:", error)
-    return { success: false, error: "Failed to store tasks" }
+    console.error("❌ Error storing business-focused tasks:", error)
+    return { success: false, error: "Failed to store strategic tasks" }
   }
 }
 
