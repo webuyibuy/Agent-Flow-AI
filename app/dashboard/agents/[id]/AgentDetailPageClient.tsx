@@ -73,20 +73,26 @@ export default function AgentDetailPageClient({ agent, tasksData, agentId }: Age
   // Handle agent execution
   const handleStartExecution = async () => {
     setIsExecuting(true)
-    setExecutionLogs((prev) => [...prev, "Starting agent execution..."])
+    setExecutionLogs((prev) => [...prev, "🚀 Initializing AI execution engine..."])
 
     try {
       const result = await startAgentExecution(agentId)
       if (result.success) {
-        setExecutionLogs((prev) => [...prev, ...result.logs])
+        setExecutionLogs((prev) => [
+          ...prev,
+          "✅ Agent execution started successfully",
+          "🧠 AI engine is now processing tasks",
+          "📊 Monitor progress in real-time below",
+          ...(result.logs || []),
+        ])
       } else {
-        setExecutionLogs((prev) => [...prev, `Execution error: ${result.error}`])
+        setExecutionLogs((prev) => [...prev, `❌ Execution error: ${result.error}`])
       }
     } catch (error) {
       console.error("Execution error:", error)
       setExecutionLogs((prev) => [
         ...prev,
-        `Execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        `❌ Execution failed: ${error instanceof Error ? error.message : String(error)}`,
       ])
     } finally {
       setIsExecuting(false)
@@ -163,14 +169,14 @@ export default function AgentDetailPageClient({ agent, tasksData, agentId }: Age
                   className="flex items-center gap-1"
                 >
                   <Square className="h-4 w-4" />
-                  Stop Execution
+                  Stop AI Execution
                 </Button>
               ) : (
                 <Button
                   variant="default"
                   size="sm"
                   onClick={handleStartExecution}
-                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium"
                 >
                   <Play className="h-4 w-4" />
                   Start AI Execution
@@ -300,6 +306,14 @@ export default function AgentDetailPageClient({ agent, tasksData, agentId }: Age
                   <CardDescription>Real-time agent execution logs</CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {isExecuting && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-700">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                        <span className="font-medium">AI Agent is actively working...</span>
+                      </div>
+                    </div>
+                  )}
                   <ScrollArea className="h-[400px] border rounded p-2 bg-gray-50">
                     {executionLogs.length > 0 ? (
                       <div className="space-y-1 font-mono text-sm">
@@ -311,7 +325,7 @@ export default function AgentDetailPageClient({ agent, tasksData, agentId }: Age
                       </div>
                     ) : (
                       <div className="text-center py-4 text-gray-500">
-                        No execution logs yet. Start agent execution to see logs.
+                        No execution logs yet. Click "Start AI Execution" to begin.
                       </div>
                     )}
                   </ScrollArea>
