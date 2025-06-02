@@ -23,9 +23,18 @@ interface ChatResponse {
   conversationCount?: number
   suggestions?: string[]
   apiCallMade?: boolean
+  debugInfo?: any
 }
 
 export async function generateChatResponse(request: ChatRequest): Promise<ChatResponse> {
+  const debugInfo: any = {
+    timestamp: new Date().toISOString(),
+    userId: request.userId,
+    templateName: request.templateName,
+    isInitial: request.isInitial,
+    userMessage: request.userMessage,
+  }
+
   try {
     const {
       templateSlug,
@@ -37,55 +46,54 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       currentAgentData = {},
     } = request
 
-    console.log(`🚀 [REAL API] Processing ${isInitial ? "initial" : "conversation"} for ${templateName}`)
-    console.log(`📝 User message: "${userMessage}"`)
+    console.log(`🚀 [DEBUG] Starting generateChatResponse`)
+    console.log(`📋 [DEBUG] Request:`, { templateName, userId, isInitial, userMessage })
 
     // Count conversation exchanges
     const conversationCount = messageHistory.filter((msg) => msg.role === "user").length
+    debugInfo.conversationCount = conversationCount
 
-    // Get OpenAI API key directly from user's settings
-    console.log(`🔑 Fetching API key for user: ${userId}`)
+    // Step 1: Get API key
+    console.log(`🔑 [DEBUG] Getting API key for user: ${userId}`)
     const openaiKey = await getDecryptedApiKey("openai", userId)
 
     if (!openaiKey) {
-      console.log("❌ No OpenAI API key found in user settings")
+      console.log(`❌ [DEBUG] No API key found`)
+      debugInfo.apiKeyFound = false
       return {
         success: false,
-        error: "Please add your OpenAI API key in Settings → Profile to enable real-time AI conversations.",
+        error: "No OpenAI API key found. Please add your API key in Settings → Profile.",
         apiCallMade: false,
+        debugInfo,
       }
     }
 
-    console.log(`✅ Found OpenAI API key in user settings (length: ${openaiKey.length})`)
-    console.log(`🔐 API key starts with: ${openaiKey.substring(0, 7)}...`)
+    console.log(`✅ [DEBUG] API key found: ${openaiKey.substring(0, 10)}...`)
+    debugInfo.apiKeyFound = true
+    debugInfo.apiKeyPrefix = openaiKey.substring(0, 10)
 
-    // Validate API key format before using
+    // Step 2: Validate API key format
     if (!openaiKey.startsWith("sk-")) {
-      console.log("❌ Invalid OpenAI API key format")
+      console.log(`❌ [DEBUG] Invalid API key format`)
+      debugInfo.apiKeyValid = false
       return {
         success: false,
-        error: "Invalid OpenAI API key format. Please check your API key in Settings.",
+        error: "Invalid OpenAI API key format. Please check your API key.",
         apiCallMade: false,
+        debugInfo,
       }
     }
 
-    // Build conversation for OpenAI
+    debugInfo.apiKeyValid = true
+
+    // Step 3: Build messages for OpenAI
     const messages = []
 
-    // System prompt for intelligent conversation
-    const systemPrompt = `You are an expert ${templateName} having a REAL conversation with someone who wants to create an AI agent.
+    const systemPrompt = `You are a professional ${templateName} AI assistant. You are helping someone configure an AI agent like yourself.
 
-IMPORTANT INSTRUCTIONS:
-1. Respond naturally and accurately to ANYTHING they say - silly, serious, random, or professional
-2. Be genuinely helpful and build on their input
-3. When you have enough context, suggest specific strategies or actions
-4. Ask follow-up questions to understand their needs better
-5. If they give you good information, build a strategy around it
-6. Be conversational but professional
+Be intelligent, helpful, and professional. Respond naturally to whatever they say and help them understand how to set up their agent effectively.
 
-Current context: They're setting up a ${templateName} agent. Learn about their needs and help them configure it effectively.
-
-Respond naturally to whatever they say, even if it's random or silly. Always be helpful and engaging.`
+Ask relevant questions to understand their needs and provide specific, actionable advice.`
 
     messages.push({ role: "system", content: systemPrompt })
 
@@ -94,22 +102,25 @@ Respond naturally to whatever they say, even if it's random or silly. Always be 
       messages.push({ role: msg.role as "user" | "assistant", content: msg.content })
     })
 
-    // Add current message if not initial
+    // Add current message
     if (!isInitial && userMessage) {
       messages.push({ role: "user", content: userMessage })
     }
 
-    // For initial message, ask OpenAI to introduce itself
     if (isInitial) {
       messages.push({
         role: "user",
-        content: `Introduce yourself as a ${templateName} and start a natural conversation to understand how you can help me set up an AI agent like you.`,
+        content: `Hello! I want to set up a ${templateName} AI agent. Please introduce yourself and ask me what I need help with.`,
       })
     }
 
-    console.log(`📡 Making REAL OpenAI API call with ${messages.length} messages...`)
+    console.log(`📡 [DEBUG] Making OpenAI API call with ${messages.length} messages`)
+    debugInfo.messagesCount = messages.length
+    debugInfo.apiCallAttempted = true
 
-    // Make REAL OpenAI API call
+    // Step 4: Make REAL OpenAI API call
+    const apiStartTime = Date.now()
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -120,38 +131,55 @@ Respond naturally to whatever they say, even if it's random or silly. Always be 
         model: "gpt-4o-mini",
         messages: messages,
         max_tokens: 300,
-        temperature: 0.9,
+        temperature: 0.8,
       }),
     })
 
-    console.log(`📡 OpenAI API Response Status: ${response.status}`)
+    const apiEndTime = Date.now()
+    debugInfo.apiCallDuration = apiEndTime - apiStartTime
+
+    console.log(`📡 [DEBUG] OpenAI API Response Status: ${response.status}`)
+    console.log(`⏱️ [DEBUG] API call took: ${debugInfo.apiCallDuration}ms`)
+
+    debugInfo.apiResponseStatus = response.status
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      console.error("❌ OpenAI API Error:", errorData)
+      const errorText = await response.text()
+      console.error(`❌ [DEBUG] OpenAI API Error:`, errorText)
+      debugInfo.apiError = errorText
+
       return {
         success: false,
-        error: `OpenAI API Error: ${response.status} - ${JSON.stringify(errorData)}`,
+        error: `OpenAI API Error (${response.status}): ${errorText}`,
         apiCallMade: true,
+        debugInfo,
       }
     }
 
+    // Step 5: Parse response
     const data = await response.json()
     const aiMessage = data.choices?.[0]?.message?.content || ""
 
-    console.log(`✅ OpenAI API Success! Response: "${aiMessage.substring(0, 100)}..."`)
-    console.log(`💰 Tokens used: ${data.usage?.total_tokens || "unknown"}`)
+    console.log(`✅ [DEBUG] OpenAI Success! Message length: ${aiMessage.length}`)
+    console.log(`💰 [DEBUG] Tokens used: ${data.usage?.total_tokens || "unknown"}`)
+    console.log(`🤖 [DEBUG] AI Response: "${aiMessage.substring(0, 100)}..."`)
 
-    // Extract agent information if we have enough conversation
+    debugInfo.aiMessageLength = aiMessage.length
+    debugInfo.tokensUsed = data.usage?.total_tokens
+    debugInfo.apiCallSuccessful = true
+
+    // Step 6: Extract agent info if enough conversation
     let extractedData = {}
-    let suggestions: string[] = []
-
     if (conversationCount >= 2) {
-      console.log(`🧠 Extracting agent info from conversation...`)
-      extractedData = await extractAgentInfoFromConversation(messages, userId, openaiKey)
+      console.log(`🧠 [DEBUG] Extracting agent info...`)
+      extractedData = await extractAgentInfo(messages, openaiKey, debugInfo)
+    }
 
-      // Generate suggestions based on conversation
-      suggestions = await generateSuggestions(messages, templateName, userId, openaiKey)
+    // Step 7: Generate suggestions based on conversation
+    let suggestions: string[] = []
+    if (conversationCount >= 2) {
+      console.log(`💡 [DEBUG] Generating suggestions...`)
+      suggestions = await generateSuggestions(messages, templateName, userId, openaiKey, debugInfo)
     }
 
     const updatedAgentData = { ...currentAgentData, ...extractedData }
@@ -165,40 +193,43 @@ Respond naturally to whatever they say, even if it's random or silly. Always be 
       conversationCount: isInitial ? 0 : conversationCount + 1,
       suggestions: suggestions,
       apiCallMade: true,
+      debugInfo,
     }
   } catch (error) {
-    console.error("💥 Error in generateChatResponse:", error)
+    console.error(`💥 [DEBUG] Error in generateChatResponse:`, error)
+    debugInfo.error = error instanceof Error ? error.message : String(error)
+
     return {
       success: false,
       error: `Failed to generate response: ${error instanceof Error ? error.message : "Unknown error"}`,
       apiCallMade: false,
+      debugInfo,
     }
   }
 }
 
-async function extractAgentInfoFromConversation(
+async function extractAgentInfo(
   messages: Array<{ role: string; content: string }>,
-  userId: string,
   openaiKey: string,
+  debugInfo: any,
 ): Promise<Record<string, any>> {
   try {
-    console.log(`🔍 Making REAL API call to extract agent info...`)
+    console.log(`🔍 [DEBUG] Making extraction API call...`)
 
     const extractPrompt = `Based on this conversation, extract key information about what the user wants their AI agent to help with.
 
 Conversation:
 ${messages
-  .slice(-8)
+  .slice(-6)
   .map((msg) => `${msg.role}: ${msg.content}`)
   .join("\n")}
 
-Extract and return ONLY a JSON object:
+Return ONLY a JSON object:
 {
-  "name": "suggested agent name based on conversation",
-  "goal": "what they want to accomplish",
+  "name": "suggested agent name",
+  "goal": "what they want to accomplish", 
   "behavior": "how they want the agent to behave",
-  "focus_area": "main area they want help with",
-  "notes": "key insights from conversation"
+  "focus_area": "main area of focus"
 }
 
 Return valid JSON only.`
@@ -212,10 +243,10 @@ Return valid JSON only.`
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "Extract structured information from conversations. Return only valid JSON." },
+          { role: "system", content: "Extract information and return only valid JSON." },
           { role: "user", content: extractPrompt },
         ],
-        max_tokens: 200,
+        max_tokens: 150,
         temperature: 0.1,
       }),
     })
@@ -226,14 +257,20 @@ Return valid JSON only.`
 
       try {
         const extracted = JSON.parse(jsonString)
-        console.log(`✅ Extracted agent info:`, extracted)
+        console.log(`✅ [DEBUG] Extracted:`, extracted)
+        debugInfo.extractionSuccessful = true
         return extracted
       } catch (parseError) {
-        console.log(`⚠️ Failed to parse extracted JSON: ${jsonString}`)
+        console.log(`⚠️ [DEBUG] JSON parse failed: ${jsonString}`)
+        debugInfo.extractionParseError = jsonString
       }
+    } else {
+      console.log(`❌ [DEBUG] Extraction API failed: ${response.status}`)
+      debugInfo.extractionApiFailed = response.status
     }
   } catch (error) {
-    console.error("Error extracting agent info:", error)
+    console.error(`❌ [DEBUG] Extraction error:`, error)
+    debugInfo.extractionError = error instanceof Error ? error.message : String(error)
   }
 
   return {}
@@ -244,9 +281,10 @@ async function generateSuggestions(
   templateName: string,
   userId: string,
   openaiKey: string,
+  debugInfo: any,
 ): Promise<string[]> {
   try {
-    console.log(`💡 Making REAL API call to generate suggestions...`)
+    console.log(`💡 [DEBUG] Making suggestion API call...`)
 
     const suggestionPrompt = `Based on this conversation with someone setting up a ${templateName} agent, suggest 3 specific, actionable next steps they could take.
 
@@ -287,14 +325,20 @@ Make suggestions practical and based on what they've discussed.`
 
       try {
         const suggestions = JSON.parse(jsonString)
-        console.log(`✅ Generated suggestions:`, suggestions)
+        console.log(`✅ [DEBUG] Suggestions:`, suggestions)
+        debugInfo.suggestionsSuccessful = true
         return Array.isArray(suggestions) ? suggestions : []
       } catch (parseError) {
-        console.log(`⚠️ Failed to parse suggestions JSON: ${jsonString}`)
+        console.log(`⚠️ [DEBUG] Suggestions JSON parse failed: ${jsonString}`)
+        debugInfo.suggestionsParseError = jsonString
       }
+    } else {
+      console.log(`❌ [DEBUG] Suggestions API failed: ${response.status}`)
+      debugInfo.suggestionsApiFailed = response.status
     }
   } catch (error) {
-    console.error("Error generating suggestions:", error)
+    console.error(`❌ [DEBUG] Suggestions error:`, error)
+    debugInfo.suggestionsError = error instanceof Error ? error.message : String(error)
   }
 
   return []
@@ -371,16 +415,16 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const { agentData, userId } = request
     const supabase = getSupabaseAdmin()
 
-    console.log(`🎯 Creating agent with REAL conversation data:`, agentData)
+    console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
 
-    // Validate user exists
+    // Validate user
     const { data: user, error: userError } = await supabase.from("profiles").select("id").eq("id", userId).single()
 
     if (userError || !user) {
-      return { success: false, error: "User not found. Please try logging in again." }
+      return { success: false, error: "User not found." }
     }
 
-    // Create agent with extracted data from REAL conversation
+    // Create agent
     const agentName = agentData.name || `My ${agentData.templateName}`
     const agentGoal = agentData.goal || `Help with ${agentData.templateName.toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName} assistant`
@@ -401,7 +445,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     if (agentError || !agent) {
       console.error("Error creating agent:", agentError)
-      return { success: false, error: "Failed to create agent. Please try again." }
+      return { success: false, error: "Failed to create agent." }
     }
 
     // Store conversation data
@@ -431,6 +475,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     }
   } catch (error) {
     console.error("Error in completeAgentSetup:", error)
-    return { success: false, error: "An unexpected error occurred. Please try again." }
+    return { success: false, error: "Failed to create agent." }
   }
 }
