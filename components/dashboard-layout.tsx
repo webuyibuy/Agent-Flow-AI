@@ -110,30 +110,26 @@ export default function DashboardLayoutClient({
           ))}
         </nav>
 
-        <div className="mt-auto p-4 space-y-3 flex flex-col items-center">
+        <div className="mt-auto p-4 space-y-3">
           {/* Template-based creation button - Green */}
-          <Button
-            size="lg"
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 border-0"
-            asChild
-          >
-            <Link href="/onboarding/templates" className="flex items-center justify-center gap-3 py-3">
-              <LayoutTemplateIcon className="h-5 w-5" />
-              Use Template
-            </Link>
-          </Button>
+          <Link href="/onboarding/templates" className="block">
+            <div className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
+              <div className="flex items-center justify-center gap-3">
+                <LayoutTemplateIcon className="h-5 w-5" />
+                Use Template
+              </div>
+            </div>
+          </Link>
 
           {/* Custom agent creation button - Blue */}
-          <Button
-            size="lg"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 border-0"
-            asChild
-          >
-            <Link href="/dashboard/agents/new" className="flex items-center justify-center gap-3 py-3">
-              <PlusCircleIcon className="h-5 w-5" />
-              New Agent
-            </Link>
-          </Button>
+          <Link href="/dashboard/agents/new" className="block">
+            <div className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
+              <div className="flex items-center justify-center gap-3">
+                <PlusCircleIcon className="h-5 w-5" />
+                New Agent
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* User profile section */}
