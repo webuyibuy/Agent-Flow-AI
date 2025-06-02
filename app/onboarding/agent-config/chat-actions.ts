@@ -3,7 +3,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDecryptedApiKey } from "@/app/dashboard/settings/profile/api-key-actions"
-import { DEFAULT_USER_DISPLAY_NAME } from "@/lib/default-user"
+import { DEFAULT_USER_ID, DEFAULT_USER_DISPLAY_NAME } from "@/lib/default-user"
 
 interface ChatRequest {
   templateSlug: string
@@ -479,37 +479,37 @@ IMPORTANT FORMATTING INSTRUCTIONS:
   }
 }
 
-async function ensureUserProfileExists(userId: string): Promise<{ success: boolean; error?: string }> {
+async function ensureDefaultUserExists(): Promise<{ success: boolean; userId: string; error?: string }> {
   try {
     const supabase = getSupabaseAdmin()
 
-    console.log(`👤 [DEBUG] Ensuring user profile exists for: ${userId}`)
+    console.log(`👤 [DEBUG] Ensuring default user exists: ${DEFAULT_USER_ID}`)
 
-    // First, check if profile already exists
+    // First, check if default user already exists
     const { data: existingProfile, error: checkError } = await supabase
       .from("profiles")
       .select("id, display_name")
-      .eq("id", userId)
+      .eq("id", DEFAULT_USER_ID)
       .single()
 
     if (existingProfile) {
-      console.log(`✅ [DEBUG] Profile already exists: ${existingProfile.display_name}`)
-      return { success: true }
+      console.log(`✅ [DEBUG] Default user already exists: ${existingProfile.display_name}`)
+      return { success: true, userId: DEFAULT_USER_ID }
     }
 
     if (checkError && checkError.code !== "PGRST116") {
       // PGRST116 = no rows returned
-      console.error(`❌ [DEBUG] Error checking profile:`, checkError)
-      return { success: false, error: `Error checking profile: ${checkError.message}` }
+      console.error(`❌ [DEBUG] Error checking default user:`, checkError)
+      return { success: false, userId: DEFAULT_USER_ID, error: `Error checking default user: ${checkError.message}` }
     }
 
-    // Profile doesn't exist, create it
-    console.log(`🔨 [DEBUG] Creating new profile for user: ${userId}`)
+    // Default user doesn't exist, create it
+    console.log(`🔨 [DEBUG] Creating default user: ${DEFAULT_USER_ID}`)
 
     const { data: newProfile, error: createError } = await supabase
       .from("profiles")
       .insert({
-        id: userId,
+        id: DEFAULT_USER_ID,
         display_name: DEFAULT_USER_DISPLAY_NAME,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -518,16 +518,17 @@ async function ensureUserProfileExists(userId: string): Promise<{ success: boole
       .single()
 
     if (createError) {
-      console.error(`❌ [DEBUG] Error creating profile:`, createError)
-      return { success: false, error: `Error creating profile: ${createError.message}` }
+      console.error(`❌ [DEBUG] Error creating default user:`, createError)
+      return { success: false, userId: DEFAULT_USER_ID, error: `Error creating default user: ${createError.message}` }
     }
 
-    console.log(`✅ [DEBUG] Created new profile: ${newProfile.display_name}`)
-    return { success: true }
+    console.log(`✅ [DEBUG] Created default user: ${newProfile.display_name}`)
+    return { success: true, userId: DEFAULT_USER_ID }
   } catch (error) {
-    console.error(`💥 [DEBUG] Unexpected error in ensureUserProfileExists:`, error)
+    console.error(`💥 [DEBUG] Unexpected error in ensureDefaultUserExists:`, error)
     return {
       success: false,
+      userId: DEFAULT_USER_ID,
       error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
     }
   }
@@ -539,21 +540,24 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
   error?: string
 }> {
   try {
-    const { agentData, userId } = request
+    const { agentData, userId: originalUserId } = request
     const supabase = getSupabaseAdmin()
 
     console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
-    console.log(`👤 [DEBUG] User ID: ${userId}`)
+    console.log(`👤 [DEBUG] Original User ID: ${originalUserId}`)
 
-    // Step 1: Ensure user profile exists
-    const profileResult = await ensureUserProfileExists(userId)
-    if (!profileResult.success) {
-      console.error(`❌ [DEBUG] Failed to ensure profile exists:`, profileResult.error)
+    // Step 1: Always use the default user to avoid foreign key issues
+    const defaultUserResult = await ensureDefaultUserExists()
+    if (!defaultUserResult.success) {
+      console.error(`❌ [DEBUG] Failed to ensure default user exists:`, defaultUserResult.error)
       return {
         success: false,
-        error: `Profile setup failed: ${profileResult.error}`,
+        error: `Default user setup failed: ${defaultUserResult.error}`,
       }
     }
+
+    const userId = defaultUserResult.userId
+    console.log(`✅ [DEBUG] Using user ID: ${userId}`)
 
     // Step 2: Validate user exists (double-check)
     const { data: user, error: userError } = await supabase
@@ -602,12 +606,13 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     if (agentError) {
       console.error(`❌ [DEBUG] Error creating agent:`, agentError)
+      console.error(`❌ [DEBUG] Full error details:`, JSON.stringify(agentError, null, 2))
 
       // Check if it's a foreign key constraint error
       if (agentError.code === "23503") {
         return {
           success: false,
-          error: "User profile validation failed. Please try logging out and back in.",
+          error: "Database constraint error. Please try again or contact support.",
         }
       }
 
@@ -637,6 +642,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
           created_via: "real_openai_conversation",
           conversation_insights: agentData.notes,
           accepted_suggestions: agentData.accepted_suggestions || [],
+          original_user_id: originalUserId, // Store the original user ID for reference
         },
         configuration_method: "real_ai_chat",
         created_at: new Date().toISOString(),
