@@ -110,7 +110,7 @@ export default function DashboardLayoutClient({
           ))}
         </nav>
 
-        <div className="mt-auto p-4 space-y-3">
+        <div className="mt-auto p-4 space-y-3 flex flex-col items-center">
           {/* Template-based creation button */}
           <Button variant="outline" size="lg" className="w-full" asChild>
             <Link href="/onboarding/templates" className="flex items-center gap-2">
