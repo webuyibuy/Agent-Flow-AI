@@ -24,6 +24,64 @@ export interface LLMError {
 
 export class LLMService {
   /**
+   * Validate and sanitize API key
+   */
+  private static validateApiKey(apiKey: any, provider: string): string | null {
+    // Check if API key exists and is a string
+    if (!apiKey || typeof apiKey !== "string") {
+      console.log(`❌ API key for ${provider} is not a valid string:`, typeof apiKey)
+      return null
+    }
+
+    // Trim whitespace
+    const trimmedKey = apiKey.trim()
+
+    // Check minimum length
+    if (trimmedKey.length < 10) {
+      console.log(`❌ API key for ${provider} is too short:`, trimmedKey.length)
+      return null
+    }
+
+    // Check for invalid characters that could break headers
+    const validKeyPattern = /^[a-zA-Z0-9\-_.]+$/
+    if (!validKeyPattern.test(trimmedKey)) {
+      console.log(`❌ API key for ${provider} contains invalid characters`)
+      return null
+    }
+
+    // Provider-specific validation
+    switch (provider.toLowerCase()) {
+      case "openai":
+        if (!trimmedKey.startsWith("sk-")) {
+          console.log(`❌ OpenAI API key doesn't start with 'sk-'`)
+          return null
+        }
+        break
+      case "anthropic":
+        if (!trimmedKey.startsWith("sk-ant-")) {
+          console.log(`❌ Anthropic API key doesn't start with 'sk-ant-'`)
+          return null
+        }
+        break
+      case "groq":
+        if (!trimmedKey.startsWith("gsk_")) {
+          console.log(`❌ Groq API key doesn't start with 'gsk_'`)
+          return null
+        }
+        break
+      case "xai":
+        if (!trimmedKey.startsWith("xai-")) {
+          console.log(`❌ xAI API key doesn't start with 'xai-'`)
+          return null
+        }
+        break
+    }
+
+    console.log(`✅ API key for ${provider} is valid`)
+    return trimmedKey
+  }
+
+  /**
    * Generate text using the user's configured LLM provider
    */
   static async generateText(
@@ -71,7 +129,7 @@ export class LLMService {
     const result = await this.generateText(options.prompt, {
       ...options,
       systemPrompt,
-      temperature: 0.1, // Lower temperature for more consistent JSON
+      temperature: 0.1,
       maxTokens: 2000,
     })
 
@@ -131,13 +189,20 @@ export class LLMService {
           console.log(`🔑 Attempting to use ${provider} provider...`)
 
           // Get API key from user's settings
-          const apiKey = await getDecryptedApiKey(provider, options.userId)
-          if (!apiKey) {
+          const rawApiKey = await getDecryptedApiKey(provider, options.userId)
+          if (!rawApiKey) {
             console.log(`❌ No API key found for ${provider}`)
             continue
           }
 
-          console.log(`✅ Found API key for ${provider}`)
+          // Validate and sanitize the API key
+          const apiKey = this.validateApiKey(rawApiKey, provider)
+          if (!apiKey) {
+            console.log(`❌ Invalid API key for ${provider}`)
+            continue
+          }
+
+          console.log(`✅ Valid API key found for ${provider}`)
 
           // Get preferred model for this provider
           const preferredModel = await getPreferredModel(provider, options.userId)
@@ -161,7 +226,7 @@ export class LLMService {
       }
 
       return {
-        error: "No available LLM providers. Please add API keys in Settings.",
+        error: "No available LLM providers with valid API keys. Please add API keys in Settings.",
         success: false,
       }
     } catch (error) {
@@ -174,7 +239,7 @@ export class LLMService {
   }
 
   /**
-   * Call specific provider
+   * Call specific provider with validated API key
    */
   private static async callProvider(
     provider: string,
@@ -230,12 +295,25 @@ export class LLMService {
     options: { model: string; temperature: number; maxTokens: number },
     signal: AbortSignal,
   ): Promise<Response> {
+    // Double-check API key before using in headers
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      throw new Error("Invalid OpenAI API key")
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+
+    // Safely add authorization header
+    try {
+      headers["Authorization"] = `Bearer ${apiKey.trim()}`
+    } catch (error) {
+      throw new Error("Failed to create authorization header")
+    }
+
     return fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model: options.model,
         messages,
@@ -252,6 +330,11 @@ export class LLMService {
     options: { model: string; temperature: number; maxTokens: number },
     signal: AbortSignal,
   ): Promise<Response> {
+    // Double-check API key
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      throw new Error("Invalid Anthropic API key")
+    }
+
     // Convert messages format for Anthropic
     const anthropicMessages = messages
       .filter((m) => m.role !== "system")
@@ -262,13 +345,20 @@ export class LLMService {
 
     const systemMessage = messages.find((m) => m.role === "system")?.content
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+    }
+
+    try {
+      headers["x-api-key"] = apiKey.trim()
+    } catch (error) {
+      throw new Error("Failed to create API key header")
+    }
+
     return fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers,
       body: JSON.stringify({
         model: options.model,
         max_tokens: options.maxTokens,
@@ -286,12 +376,24 @@ export class LLMService {
     options: { model: string; temperature: number; maxTokens: number },
     signal: AbortSignal,
   ): Promise<Response> {
+    // Double-check API key
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      throw new Error("Invalid Groq API key")
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+
+    try {
+      headers["Authorization"] = `Bearer ${apiKey.trim()}`
+    } catch (error) {
+      throw new Error("Failed to create authorization header")
+    }
+
     return fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model: options.model,
         messages,
@@ -308,12 +410,24 @@ export class LLMService {
     options: { model: string; temperature: number; maxTokens: number },
     signal: AbortSignal,
   ): Promise<Response> {
+    // Double-check API key
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      throw new Error("Invalid xAI API key")
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+
+    try {
+      headers["Authorization"] = `Bearer ${apiKey.trim()}`
+    } catch (error) {
+      throw new Error("Failed to create authorization header")
+    }
+
     return fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model: options.model,
         messages,
@@ -417,9 +531,12 @@ export class LLMService {
 
     for (const provider of providers) {
       try {
-        const apiKey = await getDecryptedApiKey(provider, userId)
-        if (apiKey) {
-          available.push(provider)
+        const rawApiKey = await getDecryptedApiKey(provider, userId)
+        if (rawApiKey) {
+          const validKey = this.validateApiKey(rawApiKey, provider)
+          if (validKey) {
+            available.push(provider)
+          }
         }
       } catch (error) {
         console.error(`Error checking ${provider}:`, error)
