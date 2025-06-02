@@ -43,19 +43,31 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
     // Count conversation exchanges
     const conversationCount = messageHistory.filter((msg) => msg.role === "user").length
 
-    // Get OpenAI API key directly
+    // Get OpenAI API key directly from user's settings
+    console.log(`🔑 Fetching API key for user: ${userId}`)
     const openaiKey = await getDecryptedApiKey("openai", userId)
 
     if (!openaiKey) {
-      console.log("❌ No OpenAI API key found")
+      console.log("❌ No OpenAI API key found in user settings")
       return {
         success: false,
-        error: "Please add your OpenAI API key in Settings to enable real-time AI conversations.",
+        error: "Please add your OpenAI API key in Settings → Profile to enable real-time AI conversations.",
         apiCallMade: false,
       }
     }
 
-    console.log(`✅ OpenAI API key found, making REAL API call...`)
+    console.log(`✅ Found OpenAI API key in user settings (length: ${openaiKey.length})`)
+    console.log(`🔐 API key starts with: ${openaiKey.substring(0, 7)}...`)
+
+    // Validate API key format before using
+    if (!openaiKey.startsWith("sk-")) {
+      console.log("❌ Invalid OpenAI API key format")
+      return {
+        success: false,
+        error: "Invalid OpenAI API key format. Please check your API key in Settings.",
+        apiCallMade: false,
+      }
+    }
 
     // Build conversation for OpenAI
     const messages = []
