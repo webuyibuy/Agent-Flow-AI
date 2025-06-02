@@ -66,13 +66,26 @@ export class AnalyticsService {
 
       console.log(`📊 Generating analytics for user ${actualUserId} (${timeRange})`)
 
+      // First get user's agents
+      const { data: userAgents, error: agentsError } = await supabase
+        .from("agents")
+        .select("id, name, status, created_at")
+        .eq("owner_id", actualUserId)
+
+      if (agentsError) {
+        console.error("Error fetching agents:", agentsError)
+        throw agentsError
+      }
+
+      const agentIds = userAgents?.map((a) => a.id) || []
+
       // Run all analytics queries in parallel
       const [overview, agentPerformance, executionTrends, taskDistribution, recentActivity] = await Promise.all([
-        this.getOverviewData(actualUserId, startDate),
-        this.getAgentPerformanceData(actualUserId, startDate),
+        this.getOverviewData(actualUserId, startDate, agentIds, userAgents || []),
+        this.getAgentPerformanceData(actualUserId, startDate, userAgents || []),
         this.getExecutionTrendsData(actualUserId, startDate, timeRange),
-        this.getTaskDistributionData(actualUserId, startDate),
-        this.getRecentActivityData(actualUserId, startDate),
+        this.getTaskDistributionData(actualUserId, startDate, agentIds),
+        this.getRecentActivityData(actualUserId, startDate, userAgents || []),
       ])
 
       return {
@@ -91,26 +104,28 @@ export class AnalyticsService {
   /**
    * Get overview statistics
    */
-  private async getOverviewData(userId: string, startDate: string) {
+  private async getOverviewData(userId: string, startDate: string, agentIds: string[], agents: any[]) {
     const supabase = getSupabaseAdmin()
 
-    // Get agent counts
-    const { data: agents } = await supabase.from("agents").select("id, status").eq("owner_id", userId)
+    const totalAgents = agents.length
+    const activeAgents = agents.filter((a) => a.status === "active").length
 
-    const totalAgents = agents?.length || 0
-    const activeAgents = agents?.filter((a) => a.status === "active").length || 0
+    // Get tasks for user's agents
+    let totalTasks = 0
+    let completedTasks = 0
 
-    // Get task counts
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, status, created_at")
-      .eq("agent_id", "ANY(SELECT id FROM agents WHERE owner_id = $1)")
-      .gte("created_at", startDate)
+    if (agentIds.length > 0) {
+      const { data: tasks } = await supabase
+        .from("tasks")
+        .select("id, status, created_at")
+        .in("agent_id", agentIds)
+        .gte("created_at", startDate)
 
-    const totalTasks = tasks?.length || 0
-    const completedTasks = tasks?.filter((t) => t.status === "done").length || 0
+      totalTasks = tasks?.length || 0
+      completedTasks = tasks?.filter((t) => t.status === "done").length || 0
+    }
 
-    // Get execution data
+    // Get execution data from agent logs
     const { data: executions } = await supabase
       .from("agent_logs")
       .select("log_type, metadata, created_at")
@@ -149,12 +164,10 @@ export class AnalyticsService {
   /**
    * Get agent performance data
    */
-  private async getAgentPerformanceData(userId: string, startDate: string) {
+  private async getAgentPerformanceData(userId: string, startDate: string, agents: any[]) {
     const supabase = getSupabaseAdmin()
 
-    const { data: agents } = await supabase.from("agents").select("id, name").eq("owner_id", userId)
-
-    if (!agents) return []
+    if (!agents || agents.length === 0) return []
 
     const performanceData = await Promise.all(
       agents.map(async (agent) => {
@@ -175,6 +188,7 @@ export class AnalyticsService {
           .select("metadata, created_at")
           .eq("agent_id", agent.id)
           .gte("created_at", startDate)
+          .order("created_at", { ascending: false })
 
         const executionTimes = logs
           ?.map((l) => l.metadata?.execution_time)
@@ -258,13 +272,21 @@ export class AnalyticsService {
   /**
    * Get task distribution data
    */
-  private async getTaskDistributionData(userId: string, startDate: string) {
+  private async getTaskDistributionData(userId: string, startDate: string, agentIds: string[]) {
     const supabase = getSupabaseAdmin()
+
+    if (agentIds.length === 0) {
+      return {
+        byStatus: {},
+        byPriority: {},
+        byType: {},
+      }
+    }
 
     const { data: tasks } = await supabase
       .from("tasks")
       .select("status, priority, metadata")
-      .eq("agent_id", "ANY(SELECT id FROM agents WHERE owner_id = $1)")
+      .in("agent_id", agentIds)
       .gte("created_at", startDate)
 
     if (!tasks) {
@@ -298,7 +320,7 @@ export class AnalyticsService {
   /**
    * Get recent activity data
    */
-  private async getRecentActivityData(userId: string, startDate: string) {
+  private async getRecentActivityData(userId: string, startDate: string, agents: any[]) {
     const supabase = getSupabaseAdmin()
 
     const { data: logs } = await supabase
@@ -311,17 +333,14 @@ export class AnalyticsService {
 
     if (!logs) return []
 
-    // Get agent names
-    const agentIds = [...new Set(logs.map((l) => l.agent_id))]
-    const { data: agents } = await supabase.from("agents").select("id, name").in("id", agentIds)
-
-    const agentNames = new Map(agents?.map((a) => [a.id, a.name]) || [])
+    // Create agent name map
+    const agentNames = new Map(agents.map((a) => [a.id, a.name]) || [])
 
     return logs.map((log) => ({
       id: log.id,
       type: this.mapLogTypeToActivityType(log.log_type),
       agentName: agentNames.get(log.agent_id) || "Unknown Agent",
-      message: log.message,
+      message: log.message || "No message",
       timestamp: log.created_at,
       metadata: log.metadata,
     }))

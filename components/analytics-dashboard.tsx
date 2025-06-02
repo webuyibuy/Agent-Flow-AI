@@ -32,11 +32,34 @@ export default function AnalyticsDashboard({ userId }: AnalyticsDashboardProps) 
   const loadAnalytics = async () => {
     try {
       setLoading(true)
+      console.log("Loading analytics...")
       const data = await analyticsService.getAnalytics(userId, timeRange)
+      console.log("Analytics loaded:", data)
       setAnalytics(data)
       setLastUpdated(new Date())
     } catch (error) {
       console.error("Failed to load analytics:", error)
+      // Set empty analytics data to prevent crashes
+      setAnalytics({
+        overview: {
+          totalAgents: 0,
+          activeAgents: 0,
+          totalTasks: 0,
+          completedTasks: 0,
+          totalExecutions: 0,
+          successRate: 0,
+          avgExecutionTime: 0,
+          totalTokensUsed: 0,
+        },
+        agentPerformance: [],
+        executionTrends: [],
+        taskDistribution: {
+          byStatus: {},
+          byPriority: {},
+          byType: {},
+        },
+        recentActivity: [],
+      })
     } finally {
       setLoading(false)
     }
