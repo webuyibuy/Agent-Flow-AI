@@ -1,6 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { createClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ConnectionManager } from "./connection-manager"
 
@@ -14,6 +13,39 @@ export function getSupabaseFromServer() {
 
   try {
     const config = connectionManager.getConfig()
+
+    // For server-side usage, we'll use the admin client approach
+    // This avoids the cookies dependency that causes build issues
+    const client = createClient(config.url, config.anonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+
+    console.log("✅ Real Supabase server client initialized")
+    return client
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase server client:", error)
+    return connectionManager.getMockClient()
+  }
+}
+
+// Create a separate function for cookie-based server client when needed
+export async function getSupabaseServerWithCookies() {
+  const connectionManager = ConnectionManager.getInstance()
+
+  if (!connectionManager.isConfigured()) {
+    console.log("🔄 Using mock Supabase server client - environment not configured")
+    return connectionManager.getMockClient()
+  }
+
+  try {
+    const config = connectionManager.getConfig()
+
+    // Dynamically import cookies only when needed
+    const { cookies } = await import("next/headers")
     const cookieStore = cookies()
 
     const client = createServerClient(config.url, config.anonKey, {
@@ -48,10 +80,10 @@ export function getSupabaseFromServer() {
       },
     })
 
-    console.log("✅ Real Supabase server client initialized")
+    console.log("✅ Real Supabase server client with cookies initialized")
     return client
   } catch (error) {
-    console.error("❌ Failed to initialize Supabase server client:", error)
+    console.error("❌ Failed to initialize Supabase server client with cookies:", error)
     return connectionManager.getMockClient()
   }
 }
