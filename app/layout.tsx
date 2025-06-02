@@ -1,7 +1,8 @@
 import type React from "react"
+
 export const metadata = {
-  title: "Minimal Next.js App",
-  description: "A minimal Next.js application",
+  title: "Minimal Clean App",
+  description: "A completely clean Next.js application",
     generator: 'v0.dev'
 }
 
@@ -12,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={{ fontFamily: "system-ui, sans-serif", padding: "2rem" }}>{children}</body>
     </html>
   )
 }

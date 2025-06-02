@@ -13,6 +13,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config) => {
+    // Ignore supabase-js if it somehow gets referenced
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "supabase-js": false,
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig

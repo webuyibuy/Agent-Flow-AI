@@ -1,4 +1,8 @@
+node_modules
+.next
+package-lock.json
 pnpm-lock.yaml
 yarn.lock
-.pnpm
-node_modules/.pnpm
+.env.local
+.env.development.local
+.env.production.local
