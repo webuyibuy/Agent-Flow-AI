@@ -66,7 +66,7 @@ export class AnalyticsService {
 
       console.log(`📊 Generating analytics for user ${actualUserId} (${timeRange})`)
 
-      // First get user's agents
+      // Get user's agents with proper error handling
       const { data: userAgents, error: agentsError } = await supabase
         .from("agents")
         .select("id, name, status, created_at")
@@ -74,18 +74,35 @@ export class AnalyticsService {
 
       if (agentsError) {
         console.error("Error fetching agents:", agentsError)
-        throw agentsError
+        // Return empty data instead of throwing
+        return this.getEmptyAnalytics()
       }
 
-      const agentIds = userAgents?.map((a) => a.id) || []
+      const agents = userAgents || []
+      const agentIds = agents.map((a) => a.id)
 
-      // Run all analytics queries in parallel
+      // Run all analytics queries with proper error handling
       const [overview, agentPerformance, executionTrends, taskDistribution, recentActivity] = await Promise.all([
-        this.getOverviewData(actualUserId, startDate, agentIds, userAgents || []),
-        this.getAgentPerformanceData(actualUserId, startDate, userAgents || []),
-        this.getExecutionTrendsData(actualUserId, startDate, timeRange),
-        this.getTaskDistributionData(actualUserId, startDate, agentIds),
-        this.getRecentActivityData(actualUserId, startDate, userAgents || []),
+        this.getOverviewData(actualUserId, startDate, agentIds, agents).catch((e) => {
+          console.error("Error getting overview data:", e)
+          return this.getEmptyOverview()
+        }),
+        this.getAgentPerformanceData(actualUserId, startDate, agents).catch((e) => {
+          console.error("Error getting agent performance:", e)
+          return []
+        }),
+        this.getExecutionTrendsData(actualUserId, startDate, timeRange).catch((e) => {
+          console.error("Error getting execution trends:", e)
+          return []
+        }),
+        this.getTaskDistributionData(actualUserId, startDate, agentIds).catch((e) => {
+          console.error("Error getting task distribution:", e)
+          return { byStatus: {}, byPriority: {}, byType: {} }
+        }),
+        this.getRecentActivityData(actualUserId, startDate, agents).catch((e) => {
+          console.error("Error getting recent activity:", e)
+          return []
+        }),
       ])
 
       return {
@@ -97,7 +114,40 @@ export class AnalyticsService {
       }
     } catch (error) {
       console.error("Error generating analytics:", error)
-      throw error
+      return this.getEmptyAnalytics()
+    }
+  }
+
+  /**
+   * Get empty analytics data structure
+   */
+  private getEmptyAnalytics(): AnalyticsData {
+    return {
+      overview: this.getEmptyOverview(),
+      agentPerformance: [],
+      executionTrends: [],
+      taskDistribution: {
+        byStatus: {},
+        byPriority: {},
+        byType: {},
+      },
+      recentActivity: [],
+    }
+  }
+
+  /**
+   * Get empty overview data
+   */
+  private getEmptyOverview() {
+    return {
+      totalAgents: 0,
+      activeAgents: 0,
+      totalTasks: 0,
+      completedTasks: 0,
+      totalExecutions: 0,
+      successRate: 0,
+      avgExecutionTime: 0,
+      totalTokensUsed: 0,
     }
   }
 
@@ -115,39 +165,51 @@ export class AnalyticsService {
     let completedTasks = 0
 
     if (agentIds.length > 0) {
-      const { data: tasks } = await supabase
+      const { data: tasks, error: tasksError } = await supabase
         .from("tasks")
         .select("id, status, created_at")
         .in("agent_id", agentIds)
         .gte("created_at", startDate)
 
-      totalTasks = tasks?.length || 0
-      completedTasks = tasks?.filter((t) => t.status === "done").length || 0
+      if (!tasksError && tasks) {
+        totalTasks = tasks.length
+        completedTasks = tasks.filter((t) => t.status === "done").length
+      }
     }
 
     // Get execution data from agent logs
-    const { data: executions } = await supabase
+    const { data: executions, error: executionsError } = await supabase
       .from("agent_logs")
       .select("log_type, metadata, created_at")
       .eq("user_id", userId)
-      .eq("log_type", "milestone")
       .gte("created_at", startDate)
 
-    const totalExecutions = executions?.length || 0
-    const successfulExecutions = executions?.filter((e) => !e.metadata?.error).length || 0
+    let totalExecutions = 0
+    let successfulExecutions = 0
+    let avgExecutionTime = 0
+    let totalTokensUsed = 0
+
+    if (!executionsError && executions) {
+      const milestoneExecutions = executions.filter((e) => e.log_type === "milestone")
+      totalExecutions = milestoneExecutions.length
+      successfulExecutions = milestoneExecutions.filter((e) => !e.metadata?.error).length
+
+      // Calculate average execution time and token usage
+      const executionTimes = milestoneExecutions
+        .map((e) => e.metadata?.execution_time)
+        .filter((t) => typeof t === "number") as number[]
+
+      avgExecutionTime =
+        executionTimes.length > 0 ? executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length : 0
+
+      const tokenUsages = milestoneExecutions
+        .map((e) => e.metadata?.tokens_used)
+        .filter((t) => typeof t === "number") as number[]
+
+      totalTokensUsed = tokenUsages.length > 0 ? tokenUsages.reduce((a, b) => a + b, 0) : 0
+    }
+
     const successRate = totalExecutions > 0 ? (successfulExecutions / totalExecutions) * 100 : 0
-
-    // Calculate average execution time and token usage
-    const executionTimes = executions
-      ?.map((e) => e.metadata?.execution_time)
-      .filter((t) => typeof t === "number") as number[]
-
-    const avgExecutionTime =
-      executionTimes?.length > 0 ? executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length : 0
-
-    const tokenUsages = executions?.map((e) => e.metadata?.tokens_used).filter((t) => typeof t === "number") as number[]
-
-    const totalTokensUsed = tokenUsages?.length > 0 ? tokenUsages.reduce((a, b) => a + b, 0) : 0
 
     return {
       totalAgents,
@@ -171,48 +233,61 @@ export class AnalyticsService {
 
     const performanceData = await Promise.all(
       agents.map(async (agent) => {
-        // Get tasks for this agent
-        const { data: tasks } = await supabase
-          .from("tasks")
-          .select("id, status, created_at, metadata")
-          .eq("agent_id", agent.id)
-          .gte("created_at", startDate)
+        try {
+          // Get tasks for this agent
+          const { data: tasks } = await supabase
+            .from("tasks")
+            .select("id, status, created_at, metadata")
+            .eq("agent_id", agent.id)
+            .gte("created_at", startDate)
 
-        const tasksCompleted = tasks?.filter((t) => t.status === "done").length || 0
-        const totalTasks = tasks?.length || 0
-        const successRate = totalTasks > 0 ? (tasksCompleted / totalTasks) * 100 : 0
+          const tasksCompleted = tasks?.filter((t) => t.status === "done").length || 0
+          const totalTasks = tasks?.length || 0
+          const successRate = totalTasks > 0 ? (tasksCompleted / totalTasks) * 100 : 0
 
-        // Get execution logs for this agent
-        const { data: logs } = await supabase
-          .from("agent_logs")
-          .select("metadata, created_at")
-          .eq("agent_id", agent.id)
-          .gte("created_at", startDate)
-          .order("created_at", { ascending: false })
+          // Get execution logs for this agent
+          const { data: logs } = await supabase
+            .from("agent_logs")
+            .select("metadata, created_at")
+            .eq("agent_id", agent.id)
+            .gte("created_at", startDate)
+            .order("created_at", { ascending: false })
 
-        const executionTimes = logs
-          ?.map((l) => l.metadata?.execution_time)
-          .filter((t) => typeof t === "number") as number[]
+          const executionTimes = logs
+            ?.map((l) => l.metadata?.execution_time)
+            .filter((t) => typeof t === "number") as number[]
 
-        const avgExecutionTime =
-          executionTimes?.length > 0 ? executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length : 0
+          const avgExecutionTime =
+            executionTimes?.length > 0 ? executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length : 0
 
-        const tokensUsed =
-          logs
-            ?.map((l) => l.metadata?.tokens_used)
-            .filter((t) => typeof t === "number")
-            .reduce((a, b) => a + b, 0) || 0
+          const tokensUsed =
+            logs
+              ?.map((l) => l.metadata?.tokens_used)
+              .filter((t) => typeof t === "number")
+              .reduce((a, b) => a + b, 0) || 0
 
-        const lastExecution = logs?.[0]?.created_at || ""
+          const lastExecution = logs?.[0]?.created_at || ""
 
-        return {
-          agentId: agent.id,
-          agentName: agent.name || "Unnamed Agent",
-          tasksCompleted,
-          successRate: Math.round(successRate),
-          avgExecutionTime: Math.round(avgExecutionTime),
-          tokensUsed,
-          lastExecution,
+          return {
+            agentId: agent.id,
+            agentName: agent.name || "Unnamed Agent",
+            tasksCompleted,
+            successRate: Math.round(successRate),
+            avgExecutionTime: Math.round(avgExecutionTime),
+            tokensUsed,
+            lastExecution,
+          }
+        } catch (error) {
+          console.error(`Error getting performance for agent ${agent.id}:`, error)
+          return {
+            agentId: agent.id,
+            agentName: agent.name || "Unnamed Agent",
+            tasksCompleted: 0,
+            successRate: 0,
+            avgExecutionTime: 0,
+            tokensUsed: 0,
+            lastExecution: "",
+          }
         }
       }),
     )
@@ -226,26 +301,29 @@ export class AnalyticsService {
   private async getExecutionTrendsData(userId: string, startDate: string, timeRange: string) {
     const supabase = getSupabaseAdmin()
 
-    const { data: logs } = await supabase
+    const { data: logs, error } = await supabase
       .from("agent_logs")
       .select("log_type, metadata, created_at")
       .eq("user_id", userId)
       .gte("created_at", startDate)
-      .order("created_at")
+      .order("created_at", { ascending: true })
 
-    if (!logs) return []
+    if (error || !logs) {
+      console.error("Error fetching execution trends:", error)
+      return []
+    }
 
     // Group by date
     const groupedData: Record<string, { executions: number; successes: number; failures: number; times: number[] }> = {}
 
     logs.forEach((log) => {
-      const date = new Date(log.created_at).toISOString().split("T")[0]
-
-      if (!groupedData[date]) {
-        groupedData[date] = { executions: 0, successes: 0, failures: 0, times: [] }
-      }
-
       if (log.log_type === "milestone") {
+        const date = new Date(log.created_at).toISOString().split("T")[0]
+
+        if (!groupedData[date]) {
+          groupedData[date] = { executions: 0, successes: 0, failures: 0, times: [] }
+        }
+
         groupedData[date].executions++
 
         if (log.metadata?.error) {
@@ -283,13 +361,14 @@ export class AnalyticsService {
       }
     }
 
-    const { data: tasks } = await supabase
+    const { data: tasks, error } = await supabase
       .from("tasks")
       .select("status, priority, metadata")
       .in("agent_id", agentIds)
       .gte("created_at", startDate)
 
-    if (!tasks) {
+    if (error || !tasks) {
+      console.error("Error fetching task distribution:", error)
       return {
         byStatus: {},
         byPriority: {},
@@ -323,7 +402,7 @@ export class AnalyticsService {
   private async getRecentActivityData(userId: string, startDate: string, agents: any[]) {
     const supabase = getSupabaseAdmin()
 
-    const { data: logs } = await supabase
+    const { data: logs, error } = await supabase
       .from("agent_logs")
       .select("id, log_type, message, metadata, created_at, agent_id")
       .eq("user_id", userId)
@@ -331,7 +410,10 @@ export class AnalyticsService {
       .order("created_at", { ascending: false })
       .limit(20)
 
-    if (!logs) return []
+    if (error || !logs) {
+      console.error("Error fetching recent activity:", error)
+      return []
+    }
 
     // Create agent name map
     const agentNames = new Map(agents.map((a) => [a.id, a.name]) || [])
