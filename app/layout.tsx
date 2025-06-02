@@ -1,8 +1,8 @@
-import type React from "react"
+import './globals.css'
 
 export const metadata = {
-  title: "Minimal Clean App",
-  description: "A completely clean Next.js application",
+  title: 'Basic Next.js App',
+  description: 'A basic Next.js application',
     generator: 'v0.dev'
 }
 
@@ -13,10 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: "system-ui, sans-serif", padding: "2rem" }}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
-
-
-import './globals.css'
