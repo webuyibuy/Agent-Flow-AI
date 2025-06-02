@@ -3,123 +3,217 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { getDefaultUserId } from "@/lib/default-user"
 import { revalidatePath } from "next/cache"
-import { AgentOrchestrator } from "@/lib/agent-orchestrator"
-import { getTemplateById } from "@/lib/agent-templates"
+import { multiLLMProvider } from "@/lib/multi-llm-provider"
+import { AITaskAnalyzer } from "@/lib/ai-task-analyzer"
 
-export interface DeployAgentState {
-  success?: boolean
-  error?: string
-  agentId?: string
+interface DeployAgentParams {
+  name: string
+  goal: string
+  templateSlug?: string
+  templateName?: string
+  behavior?: string
+  customAnswers?: Record<string, string>
+  userId: string
+  plan?: any
 }
 
-export async function deployAgent(prevState: DeployAgentState, formData: FormData): Promise<DeployAgentState> {
+interface DeployAgentResult {
+  success: boolean
+  message?: string
+  error?: string
+  agentId?: string
+  redirectUrl?: string
+}
+
+export async function deployAgent(params: DeployAgentParams): Promise<DeployAgentResult> {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
-    let userId: string
+    console.log("Starting agent deployment with params:", JSON.stringify(params, null, 2))
 
-    try {
-      userId = await getDefaultUserId()
-    } catch (error) {
-      return { error: "Please log in to deploy an agent." }
+    // Get the user ID
+    let userId = params.userId
+    if (!userId) {
+      try {
+        userId = await getDefaultUserId()
+      } catch (error) {
+        console.error("Error getting default user ID:", error)
+        return {
+          success: false,
+          error: "Authentication required. Please log in and try again.",
+        }
+      }
     }
 
-    const templateSlug = formData.get("templateSlug") as string
-    const agentName = formData.get("agentName") as string
+    // Get admin Supabase client for database operations
+    const supabase = getSupabaseAdmin()
 
-    // Get template info
-    const template = getTemplateById(templateSlug)
-
-    if (!template && templateSlug !== "custom-agent") {
-      return { error: "Invalid template selected." }
-    }
-
-    // Simple validation
-    if (!agentName?.trim() || agentName.trim().length < 3) {
-      return { error: "Agent name must be at least 3 characters long." }
-    }
-
-    console.log(`[DeployAgent] Deploying agent "${agentName}" from template "${templateSlug}" for user ${userId}`)
-
-    // In a real implementation, you'd retrieve the full configuration from the session
-    // For this demo, we'll use simplified data
-    const agentGoal = template?.defaultGoal || "Custom agent goal"
-    const agentBehavior = template?.defaultBehavior || ""
-
-    // Create the agent
-    const { data: agent, error: agentError } = await supabaseAdmin
+    // Create the agent record without metadata column
+    const { data: agent, error: agentError } = await supabase
       .from("agents")
       .insert({
+        name: params.name,
+        goal: params.goal,
         owner_id: userId,
-        name: agentName.trim(),
-        goal: agentGoal,
+        template_slug: params.templateSlug || "custom-agent",
+        template_name: params.templateName || "Custom Agent",
+        behavior: params.behavior || "",
         status: "active",
-        metadata: {
-          created_via: "template_wizard",
-          template_id: templateSlug,
-          template_name: template?.name || "Custom Agent",
-          behavior: agentBehavior,
-          priority: "medium",
-          auto_start: true,
-        },
         created_at: new Date().toISOString(),
       })
       .select("id")
       .single()
 
-    if (agentError || !agent) {
-      console.error("[DeployAgent] Error creating agent:", agentError)
-      return { error: "Failed to create agent. Please try again." }
-    }
-
-    // Create initial tasks if template has suggested tasks
-    if (template?.sampleTasks && template.sampleTasks.length > 0) {
-      const tasksToInsert = template.sampleTasks.map((task, index) => ({
-        agent_id: agent.id,
-        title: task,
-        description: `Auto-generated task from template: ${task}`,
-        status: "pending",
-        priority: "medium",
-        created_at: new Date().toISOString(),
-        position: index,
-      }))
-
-      const { error: tasksError } = await supabaseAdmin.from("tasks").insert(tasksToInsert)
-
-      if (tasksError) {
-        console.error("[DeployAgent] Error creating initial tasks:", tasksError)
-        // Continue anyway, not critical
-      } else {
-        console.log(`[DeployAgent] Created ${tasksToInsert.length} initial tasks for agent ${agent.id}`)
+    if (agentError) {
+      console.error("Error creating agent:", agentError)
+      return {
+        success: false,
+        error: `Failed to create agent: ${agentError.message}`,
       }
     }
 
-    // Start the agent working immediately
-    await AgentOrchestrator.startAgent({
-      agentId: agent.id,
-      agentName: agentName,
-      agentGoal: agentGoal,
-      agentBehavior: agentBehavior,
-      userId,
+    const agentId = agent.id
+
+    // Store custom answers and metadata in agent_custom_data table if provided
+    if (params.customAnswers && Object.keys(params.customAnswers).length > 0) {
+      const customDataToStore = {
+        ...params.customAnswers,
+        configuration_method: "onboarding",
+        template_slug: params.templateSlug,
+        template_name: params.templateName,
+        deployment_source: "review_deploy",
+      }
+
+      const { error: customDataError } = await supabase.from("agent_custom_data").insert({
+        agent_id: agentId,
+        custom_data: customDataToStore,
+        configuration_method: "onboarding",
+      })
+
+      if (customDataError) {
+        console.error("Error storing custom answers:", customDataError)
+        // Non-critical error, continue with deployment
+      }
+    }
+
+    // Create initial tasks based on the plan or generate them
+    let tasks = []
+    if (params.plan && params.plan.tasks) {
+      // Use the provided plan
+      tasks = params.plan.tasks.map((task: any) => ({
+        agent_id: agentId,
+        title: task.title,
+        description: task.description,
+        priority: task.priority.toLowerCase(),
+        status: "todo",
+        is_dependency: false,
+      }))
+    } else {
+      // Generate tasks using AI
+      try {
+        // Try to use the user's LLM provider
+        const availableProviders = multiLLMProvider.getAvailableProviders()
+
+        if (availableProviders.length > 0) {
+          // Use the AI Task Analyzer to generate tasks
+          const taskAnalyzer = new AITaskAnalyzer()
+          const analysisResult = await taskAnalyzer.analyzeUserNeedsAndCreateTasks({
+            userInput: `Create initial tasks for a ${params.templateName || "custom"} agent with the goal: ${params.goal}`,
+            agentGoal: params.goal,
+            agentType: params.templateName || "Custom Agent",
+            userId: userId,
+          })
+
+          if (analysisResult.success) {
+            // Use the generated tasks
+            const creationResult = await taskAnalyzer.createTasksFromAnalysis(agentId, userId, analysisResult)
+            if (!creationResult.success) {
+              console.error("Error creating tasks from analysis:", creationResult.error)
+            }
+          } else {
+            console.error("Task analysis failed:", analysisResult.error)
+            // Continue with deployment even if task generation fails
+          }
+        } else {
+          // No LLM provider available, create default tasks
+          tasks = [
+            {
+              agent_id: agentId,
+              title: "Initial Setup",
+              description: "Configure the agent's initial settings and parameters.",
+              priority: "high",
+              status: "todo",
+              is_dependency: false,
+            },
+            {
+              agent_id: agentId,
+              title: "Define Success Metrics",
+              description: "Establish clear metrics to measure the agent's performance.",
+              priority: "medium",
+              status: "todo",
+              is_dependency: false,
+            },
+          ]
+
+          // Insert default tasks
+          if (tasks.length > 0) {
+            const { error: tasksError } = await supabase.from("tasks").insert(tasks)
+            if (tasksError) {
+              console.error("Error creating default tasks:", tasksError)
+              // Non-critical error, continue with deployment
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error generating tasks:", error)
+        // Continue with deployment even if task generation fails
+      }
+    }
+
+    // Update user's onboarding progress
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        onboarding_completed: true,
+        onboarding_step: 4, // Assuming this is the final step
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId)
+
+    if (profileError) {
+      console.error("Error updating onboarding progress:", profileError)
+      // Non-critical error, continue with deployment
+    }
+
+    // Add XP for completing onboarding
+    const { error: xpError } = await supabase.from("xp_log").insert({
+      owner_id: userId,
+      action: "completed_onboarding",
+      points: 100,
+      description: "Completed agent onboarding process",
     })
 
-    // Log creation
-    await supabaseAdmin.from("agent_logs").insert({
-      agent_id: agent.id,
-      log_type: "milestone",
-      message: `🎉 Agent "${agentName}" created from template "${template?.name || "Custom"}" and starting work immediately!`,
-      metadata: { goal: agentGoal, template: templateSlug, created_via: "template_wizard" },
-    })
+    if (xpError) {
+      console.error("Error adding XP for onboarding:", xpError)
+      // Non-critical error, continue with deployment
+    }
 
+    // Revalidate relevant paths
     revalidatePath("/dashboard")
-    revalidatePath("/dashboard/agents")
-    revalidatePath("/dashboard/dependencies")
+    revalidatePath(`/dashboard/agents/${agentId}`)
 
+    console.log("Agent deployment successful. Agent ID:", agentId)
+
+    // Return success with redirect information
     return {
       success: true,
-      agentId: agent.id,
+      message: "Agent deployed successfully!",
+      agentId: agentId,
+      redirectUrl: `/dashboard/agents/${agentId}`,
     }
-  } catch (error: any) {
-    console.error("[DeployAgent] Unexpected error:", error)
-    return { error: "Something went wrong. Please try again." }
+  } catch (error) {
+    console.error("Unexpected error in deployAgent:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred during deployment.",
+    }
   }
 }

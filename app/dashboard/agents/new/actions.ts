@@ -4,7 +4,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { getDefaultUserId } from "@/lib/default-user"
 import { revalidatePath } from "next/cache"
 import { AgentOrchestrator } from "@/lib/agent-orchestrator"
-import { getTemplateById } from "@/lib/agent-templates"
 
 export interface CreateAgentState {
   success?: boolean
@@ -40,7 +39,7 @@ export async function createAgentAction(
 
     console.log(`[CreateAgent] Creating agent "${name}" for user ${userId}`)
 
-    // Create the agent
+    // Create the agent without metadata column
     const { data: agent, error: agentError } = await supabaseAdmin
       .from("agents")
       .insert({
@@ -48,10 +47,6 @@ export async function createAgentAction(
         name: name.trim(),
         goal: goal.trim(),
         status: "active",
-        metadata: {
-          created_via: "simple_creator",
-          auto_start: true,
-        },
         created_at: new Date().toISOString(),
       })
       .select("id")
@@ -60,6 +55,22 @@ export async function createAgentAction(
     if (agentError || !agent) {
       console.error("[CreateAgent] Error creating agent:", agentError)
       return { error: "Failed to create agent. Please try again." }
+    }
+
+    // Store creation metadata in agent_custom_data table
+    const { error: customDataError } = await supabaseAdmin.from("agent_custom_data").insert({
+      agent_id: agent.id,
+      custom_data: {
+        created_via: "simple_creator",
+        auto_start: true,
+        creation_source: "dashboard_new",
+      },
+      configuration_method: "simple_creator",
+    })
+
+    if (customDataError) {
+      console.error("[CreateAgent] Error storing metadata:", customDataError)
+      // Non-critical error, continue
     }
 
     // Start the agent working immediately
@@ -120,9 +131,6 @@ export async function createAgentWithWorkflow(
       console.error("Error parsing suggested tasks:", e)
     }
 
-    // Get template for additional metadata
-    const template = getTemplateById(templateId)
-
     // Simple validation
     if (!name?.trim() || name.trim().length < 3) {
       return { error: "Agent name must be at least 3 characters long." }
@@ -134,7 +142,7 @@ export async function createAgentWithWorkflow(
 
     console.log(`[CreateAgentWithWorkflow] Creating agent "${name}" from template "${templateId}" for user ${userId}`)
 
-    // Create the agent
+    // Create the agent without metadata column
     const { data: agent, error: agentError } = await supabaseAdmin
       .from("agents")
       .insert({
@@ -142,14 +150,8 @@ export async function createAgentWithWorkflow(
         name: name.trim(),
         goal: goal.trim(),
         status: "active",
-        metadata: {
-          created_via: "template_wizard",
-          template_id: templateId,
-          template_name: template?.name || "Custom Agent",
-          behavior: behavior?.trim(),
-          priority,
-          auto_start: true,
-        },
+        template_slug: templateId,
+        behavior: behavior?.trim(),
         created_at: new Date().toISOString(),
       })
       .select("id")
@@ -158,6 +160,25 @@ export async function createAgentWithWorkflow(
     if (agentError || !agent) {
       console.error("[CreateAgentWithWorkflow] Error creating agent:", agentError)
       return { error: "Failed to create agent. Please try again." }
+    }
+
+    // Store workflow metadata in agent_custom_data table
+    const { error: customDataError } = await supabaseAdmin.from("agent_custom_data").insert({
+      agent_id: agent.id,
+      custom_data: {
+        created_via: "template_wizard",
+        template_id: templateId,
+        behavior: behavior?.trim(),
+        priority,
+        auto_start: true,
+        creation_source: "workflow",
+      },
+      configuration_method: "template_wizard",
+    })
+
+    if (customDataError) {
+      console.error("[CreateAgentWithWorkflow] Error storing metadata:", customDataError)
+      // Non-critical error, continue
     }
 
     // Create initial tasks if provided
@@ -195,7 +216,7 @@ export async function createAgentWithWorkflow(
     await supabaseAdmin.from("agent_logs").insert({
       agent_id: agent.id,
       log_type: "milestone",
-      message: `🎉 Agent "${name}" created from template "${template?.name || "Custom"}" and starting work immediately!`,
+      message: `🎉 Agent "${name}" created from template and starting work immediately!`,
       metadata: { goal, template: templateId, created_via: "template_wizard" },
     })
 

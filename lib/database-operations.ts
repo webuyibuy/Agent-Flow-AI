@@ -95,7 +95,7 @@ export class DatabaseOperations {
             .from("agents")
             .select("id")
             .eq("name", agentData.name)
-            .eq("workspace_id", agentData.workspaceId)
+            .eq("owner_id", userId)
             .single()
           return data
         },
@@ -130,6 +130,20 @@ export class DatabaseOperations {
         3,
         "create_agent",
       )
+
+      // Store metadata in agent_custom_data table
+      if (agentData.metadata) {
+        const { error: customDataError } = await this.supabase.from("agent_custom_data").insert({
+          agent_id: result.id,
+          custom_data: agentData.metadata,
+          configuration_method: "database_operations",
+        })
+
+        if (customDataError) {
+          console.error("Error storing agent metadata:", customDataError)
+          // Non-critical error, continue
+        }
+      }
 
       // Initialize agent asynchronously
       this.initializeAgentAsync(result.id, userId)
