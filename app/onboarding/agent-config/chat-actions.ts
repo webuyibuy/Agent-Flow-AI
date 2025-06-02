@@ -1,8 +1,6 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { AIOperations } from "@/lib/ai-operations"
+import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 interface ChatRequest {
@@ -37,40 +35,11 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
 
     // Generate initial greeting
     if (isInitial) {
-      const initialPrompt = `
-You are a friendly ${templateName} assistant helping a user set up their agent.
-
-Start with a warm, brief greeting (1-2 sentences) and ask ONE simple question to begin the setup process.
-
-For example, ask what they want to accomplish with this agent or what their main goal is.
-
-Keep your response very concise and conversational. Just one question at a time.
-`
-
-      try {
-        const response = await AIOperations.generateConversationalResponse(
-          initialPrompt,
-          [],
-          {
-            userName: "User",
-            agentRole: templateName,
-            templateSlug: templateSlug,
-          },
-          userId,
-        )
-
-        return {
-          success: true,
-          message: response || getDefaultGreeting(templateName),
-          agentData: { templateSlug, templateName },
-        }
-      } catch (error) {
-        console.error("Error generating initial greeting:", error)
-        return {
-          success: true,
-          message: getDefaultGreeting(templateName),
-          agentData: { templateSlug, templateName },
-        }
+      const greeting = getDefaultGreeting(templateName)
+      return {
+        success: true,
+        message: greeting,
+        agentData: { templateSlug, templateName },
       }
     }
 
@@ -82,49 +51,28 @@ Keep your response very concise and conversational. Just one question at a time.
       // Check if we have all required information
       const setupComplete = isSetupComplete(currentAgentData, neededInfo)
 
-      // Create a prompt based on what information we still need
-      const prompt = createNextQuestionPrompt(templateName, userMessage, neededInfo, setupComplete)
+      // Extract information from the user's message
+      const extractedData = extractInfoFromMessage(
+        userMessage,
+        messageHistory[messageHistory.length - 2]?.content || "",
+        currentAgentData,
+      )
 
-      try {
-        // Generate the conversational response
-        const conversationHistory = messageHistory.map((msg) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        }))
+      const updatedAgentData = { ...currentAgentData, ...extractedData }
 
-        const response = await AIOperations.generateConversationalResponse(
-          userMessage,
-          conversationHistory,
-          {
-            userName: "User",
-            agentRole: templateName,
-            templateSlug: templateSlug,
-          },
-          userId,
-        )
+      // Generate next question or completion message
+      let nextMessage = ""
+      if (setupComplete) {
+        nextMessage = "Perfect! I have all the information I need. Ready to create your agent?"
+      } else {
+        nextMessage = getNextQuestion(neededInfo[0], templateName)
+      }
 
-        // Extract information from the user's message
-        const extractedData = await extractInfoFromMessage(
-          userMessage,
-          messageHistory[messageHistory.length - 2]?.content || "",
-          currentAgentData,
-          userId,
-        )
-
-        return {
-          success: true,
-          message: response || getDefaultResponse(neededInfo),
-          agentData: { ...currentAgentData, ...extractedData },
-          setupComplete,
-        }
-      } catch (error) {
-        console.error("Error in conversation:", error)
-        return {
-          success: true,
-          message: getDefaultResponse(neededInfo),
-          agentData: currentAgentData,
-          setupComplete,
-        }
+      return {
+        success: true,
+        message: nextMessage,
+        agentData: updatedAgentData,
+        setupComplete,
       }
     }
 
@@ -148,10 +96,11 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 }> {
   try {
     const { agentData, userId } = request
+    const supabase = getSupabaseAdmin()
 
     // Validate required fields
     if (!agentData.name) {
-      agentData.name = agentData.templateName + " Agent"
+      agentData.name = `${agentData.templateName} Agent`
     }
 
     if (!agentData.goal) {
@@ -161,9 +110,9 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       }
     }
 
-    // Create the agent in the database
-    const supabase = createServerActionClient({ cookies })
+    console.log(`[CompleteAgentSetup] Creating agent for user ${userId}:`, agentData)
 
+    // Create the agent in the database using existing schema
     const { data: agent, error } = await supabase
       .from("agents")
       .insert({
@@ -174,8 +123,9 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         template_slug: agentData.templateSlug,
         template_name: agentData.templateName,
         status: "active",
+        created_at: new Date().toISOString(),
       })
-      .select()
+      .select("id")
       .single()
 
     if (error) {
@@ -186,31 +136,48 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       }
     }
 
-    // Store additional data in custom data table
-    if (agent) {
-      const { error: customDataError } = await supabase.from("agent_custom_data").insert({
-        agent_id: agent.id,
-        custom_data: agentData,
-      })
-
-      if (customDataError) {
-        console.error("Error storing custom data:", customDataError)
-      }
-
-      // Create initial tasks based on the agent data
-      await createInitialTasks(agent.id, agentData, userId)
-
-      revalidatePath("/dashboard/agents")
-
+    if (!agent) {
       return {
-        success: true,
-        redirectUrl: `/dashboard/agents/${agent.id}`,
+        success: false,
+        error: "Failed to create agent",
       }
     }
 
+    // Store additional data in custom data table
+    const { error: customDataError } = await supabase.from("agent_custom_data").insert({
+      agent_id: agent.id,
+      owner_id: userId,
+      custom_data: agentData,
+      configuration_method: "chat_setup",
+      created_at: new Date().toISOString(),
+    })
+
+    if (customDataError) {
+      console.error("Error storing custom data:", customDataError)
+      // Continue anyway, not critical
+    }
+
+    // Create initial tasks
+    await createInitialTasks(agent.id, agentData, userId)
+
+    // Log creation
+    await supabase.from("agent_logs").insert({
+      agent_id: agent.id,
+      log_type: "milestone",
+      message: `🎉 Agent "${agentData.name}" created via chat setup!`,
+      metadata: {
+        template: agentData.templateSlug,
+        created_via: "chat_setup",
+        goal: agentData.goal,
+      },
+    })
+
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/agents")
+
     return {
-      success: false,
-      error: "Failed to create agent",
+      success: true,
+      redirectUrl: `/dashboard/agents/${agent.id}`,
     }
   } catch (error) {
     console.error("Error in completeAgentSetup:", error)
@@ -221,228 +188,114 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
   }
 }
 
-// Helper function to determine what information we still need
+// Helper functions
 function determineNeededInfo(
   messageHistory: Array<{ role: string; content: string }>,
   currentData: Record<string, any>,
 ): string[] {
   const neededInfo = []
 
-  // Check for required fields
-  if (!currentData.name) neededInfo.push("name")
   if (!currentData.goal) neededInfo.push("goal")
-
-  // Check for additional helpful information
+  if (!currentData.name) neededInfo.push("name")
   if (!currentData.behavior && messageHistory.length >= 4) neededInfo.push("behavior")
-  if (!currentData.schedule && messageHistory.length >= 6) neededInfo.push("schedule")
-  if (!currentData.success_criteria && messageHistory.length >= 8) neededInfo.push("success_criteria")
 
   return neededInfo
 }
 
-// Check if we have all the information we need
 function isSetupComplete(currentData: Record<string, any>, neededInfo: string[]): boolean {
-  // We need at least name and goal, and have asked at least 3 questions
-  return currentData.name && currentData.goal && neededInfo.length <= 1
+  return currentData.goal && currentData.name && neededInfo.length <= 1
 }
 
-// Create a prompt for the next question based on what information we need
-function createNextQuestionPrompt(
-  templateName: string,
-  userMessage: string,
-  neededInfo: string[],
-  setupComplete: boolean,
-): string {
-  if (setupComplete) {
-    return `
-Thank the user for providing all the information you need. Let them know you're ready to create their ${templateName} agent.
-Keep your response very brief and friendly.
-`
-  }
-
-  const nextInfoNeeded = neededInfo[0] || "additional_details"
-
-  const prompts: Record<string, string> = {
-    name: `
-Ask the user what they would like to name their ${templateName} agent.
-Keep your question very brief and conversational.
-`,
-    goal: `
-Ask the user what their main goal or objective is for this ${templateName} agent.
-Keep your question very brief and conversational.
-`,
-    behavior: `
-Ask the user how they would like their ${templateName} agent to behave or operate.
-Keep your question very brief and conversational.
-`,
-    schedule: `
-Ask the user if they have any specific schedule or timing requirements for this ${templateName} agent.
-Keep your question very brief and conversational.
-`,
-    success_criteria: `
-Ask the user how they will measure success for this ${templateName} agent.
-Keep your question very brief and conversational.
-`,
-    additional_details: `
-Ask the user if there's anything else they'd like to add about their ${templateName} agent.
-Keep your question very brief and conversational.
-`,
-  }
-
-  return prompts[nextInfoNeeded]
-}
-
-// Extract information from the user's message
-async function extractInfoFromMessage(
+function extractInfoFromMessage(
   userMessage: string,
   previousQuestion: string,
   currentData: Record<string, any>,
-  userId: string,
-): Promise<Record<string, any>> {
-  try {
-    // Determine what information this message might contain based on the previous question
-    const extractionPrompt = `
-Extract key information from this user message. The previous assistant question was: "${previousQuestion}"
+): Record<string, any> {
+  const result: Record<string, any> = {}
 
-User message: "${userMessage}"
+  // Simple keyword-based extraction
+  const lowerMessage = userMessage.toLowerCase()
+  const lowerPrevious = previousQuestion.toLowerCase()
 
-Based on the context, extract the most likely piece of information this is providing.
-Return a JSON object with ONLY ONE of these fields (the most relevant one):
-{
-  "name": "extracted agent name",
-  "goal": "extracted agent goal",
-  "behavior": "extracted agent behavior",
-  "schedule": "extracted schedule information",
-  "success_criteria": "extracted success criteria"
-}
-
-Only include the field that is most relevant to what was asked. Return ONLY valid JSON.
-`
-
-    const systemPrompt = `You are a data extraction assistant. Extract only the most relevant information from the user message based on the previous question context. Return only valid JSON with a single field.`
-
-    // Use the LLM provider to generate JSON
-    const { UserLLMProvider } = await import("@/lib/user-llm-provider")
-
-    const extractionResult = await UserLLMProvider.generateJSON(extractionPrompt, userId, {
-      systemPrompt,
-      temperature: 0.1, // Very low temperature for consistent extraction
-      maxTokens: 500,
-    })
-
-    if (!extractionResult) {
-      return {}
-    }
-
-    // Only return fields that aren't already set, unless the new value is significantly different
-    const result: Record<string, any> = {}
-
-    // Check each field in the extraction result
-    for (const [key, value] of Object.entries(extractionResult)) {
-      // If we don't have this data yet, or the new value is significantly different/longer
-      if (
-        !currentData[key] ||
-        (typeof value === "string" &&
-          typeof currentData[key] === "string" &&
-          value.length > currentData[key].length * 1.5)
-      ) {
-        result[key] = value
-      }
-    }
-
-    return result
-  } catch (error) {
-    console.error("Error extracting data from message:", error)
-    return {}
+  // Extract goal
+  if (
+    !currentData.goal &&
+    (lowerPrevious.includes("goal") || lowerPrevious.includes("accomplish") || lowerPrevious.includes("achieve"))
+  ) {
+    result.goal = userMessage
   }
+
+  // Extract name
+  if (!currentData.name && (lowerPrevious.includes("name") || lowerPrevious.includes("call"))) {
+    result.name = userMessage
+  }
+
+  // Extract behavior
+  if (
+    !currentData.behavior &&
+    (lowerPrevious.includes("behave") || lowerPrevious.includes("operate") || lowerPrevious.includes("work"))
+  ) {
+    result.behavior = userMessage
+  }
+
+  // If this is the first message and no specific field is being asked for, assume it's the goal
+  if (!currentData.goal && Object.keys(result).length === 0) {
+    result.goal = userMessage
+  }
+
+  return result
 }
 
-// Create initial tasks for the agent
+function getNextQuestion(neededInfo: string, templateName: string): string {
+  const questions: Record<string, string> = {
+    goal: `What would you like to accomplish with your ${templateName}?`,
+    name: `What would you like to name your ${templateName}?`,
+    behavior: `How would you like your ${templateName} to behave or operate?`,
+  }
+
+  return questions[neededInfo] || `What else would you like to tell me about your ${templateName}?`
+}
+
+function getDefaultGreeting(templateName: string): string {
+  const greetings: Record<string, string> = {
+    "Mental Peace & Mindfulness Coach":
+      "Hi! I'm your mindfulness coach. What would you like to achieve with meditation and inner peace?",
+    "Personal Fitness Trainer": "Hey there! I'm your fitness trainer. What are your fitness goals?",
+    "Sales Lead Generator": "Hello! I'm your sales assistant. What kind of leads are you looking to generate?",
+    "Customer Support Agent":
+      "Hi! I'm here to help with customer support. What kind of support do you want to provide?",
+    "Productivity Optimizer":
+      "Hi! I'm your productivity coach. What areas of your productivity would you like to improve?",
+    "Research Analyst": "Hello! I'm your research assistant. What topics would you like me to help you research?",
+    "Creative Content Creator": "Hi there! I'm your creative assistant. What kind of content would you like to create?",
+    "Personal Financial Advisor": "Hello! I'm your financial advisor. What are your financial goals?",
+  }
+
+  return (
+    greetings[templateName] ||
+    `Hi! I'm your ${templateName} assistant. What would you like to accomplish with this agent?`
+  )
+}
+
 async function createInitialTasks(agentId: string, agentData: any, userId: string): Promise<void> {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = getSupabaseAdmin()
 
-    // Generate tasks based on agent data
-    const taskPrompt = `
-Create 3-5 initial tasks for a ${agentData.templateName} agent with the goal: "${agentData.goal}"
+    // Create a simple initial task based on the agent's goal
+    const taskTitle = `Initial setup for ${agentData.name}`
+    const taskDescription = `Configure and prepare the agent to achieve: ${agentData.goal}`
 
-Return a JSON array of task objects with this structure:
-[
-  {
-    "title": "Task title",
-    "description": "Detailed task description",
-    "priority": "high|medium|low",
-    "status": "todo",
-    "category": "setup|research|implementation|review"
-  }
-]
-
-Tasks should be practical, specific, and help achieve the agent's goal.
-`
-
-    const systemPrompt = `You are a task planning assistant. Create practical, actionable tasks that will help achieve the agent's goal. Return only valid JSON.`
-
-    // Use the LLM provider to generate JSON
-    const { UserLLMProvider } = await import("@/lib/user-llm-provider")
-
-    const tasksResult = await UserLLMProvider.generateJSON(taskPrompt, userId, {
-      systemPrompt,
-      temperature: 0.7,
-      maxTokens: 1000,
+    await supabase.from("tasks").insert({
+      agent_id: agentId,
+      title: taskTitle,
+      description: taskDescription,
+      priority: "high",
+      status: "pending",
+      created_at: new Date().toISOString(),
     })
 
-    if (!tasksResult || !Array.isArray(tasksResult)) {
-      // Create a default task if generation fails
-      await supabase.from("tasks").insert({
-        agent_id: agentId,
-        title: `Initial setup for ${agentData.name || agentData.templateName}`,
-        description: `Configure and prepare the agent to achieve: ${agentData.goal}`,
-        priority: "high",
-        status: "todo",
-        category: "setup",
-        created_by: userId,
-      })
-
-      return
-    }
-
-    // Insert the generated tasks
-    for (const task of tasksResult) {
-      await supabase.from("tasks").insert({
-        agent_id: agentId,
-        title: task.title,
-        description: task.description,
-        priority: task.priority || "medium",
-        status: task.status || "todo",
-        category: task.category || "setup",
-        created_by: userId,
-      })
-    }
+    console.log(`[CreateInitialTasks] Created initial task for agent ${agentId}`)
   } catch (error) {
     console.error("Error creating initial tasks:", error)
   }
-}
-
-// Default greeting by template type
-function getDefaultGreeting(templateName: string): string {
-  return `Hi there! I'm your ${templateName} assistant. What would you like to accomplish with this agent?`
-}
-
-// Default response based on needed information
-function getDefaultResponse(neededInfo: string[]): string {
-  if (neededInfo.length === 0) {
-    return "Great! I have all the information I need. Ready to create your agent?"
-  }
-
-  const nextNeeded = neededInfo[0]
-
-  const responses: Record<string, string> = {
-    name: "What would you like to name this agent?",
-    goal: "What's the main goal or objective for this agent?",
-    behavior: "How would you like this agent to behave or operate?",
-    schedule: "Do you have any specific schedule or timing requirements for this agent?",
-    success_criteria: "How will you measure success for this agent?",
-  }
-
-  return responses[nextNeeded] || "What else would you like to tell me about this agent?"
 }

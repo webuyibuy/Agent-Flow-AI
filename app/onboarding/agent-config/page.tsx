@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { getDefaultUserId } from "@/lib/default-user"
+import { Suspense } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
 import AgentChatSetup from "@/components/agent-chat-setup"
+import { getTemplateById } from "@/lib/agent-templates"
 
 interface PageProps {
   searchParams: {
@@ -11,23 +14,33 @@ interface PageProps {
 }
 
 export default async function AgentConfigPage({ searchParams }: PageProps) {
-  // Get template from query params
-  const templateSlug = searchParams.template || "custom-agent"
-  const templateName = searchParams.name || "Custom Agent"
-
-  // Get user session
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    redirect("/login?callbackUrl=/onboarding/agent-config")
+  // Get user ID using existing pattern
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+  } catch (error) {
+    redirect("/login")
   }
 
+  // Get template from query params
+  const templateSlug = searchParams.template || "custom-agent"
+  const template = getTemplateById(templateSlug)
+  const templateName = template?.name || searchParams.name || "Custom Agent"
+
   return (
-    <div className="container max-w-5xl py-8 md:py-12">
-      <AgentChatSetup templateSlug={templateSlug} templateName={templateName} userId={session.user.id} />
+    <div className="container max-w-4xl mx-auto py-8">
+      <Suspense
+        fallback={
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p>Loading agent setup...</p>
+            </CardContent>
+          </Card>
+        }
+      >
+        <AgentChatSetup templateSlug={templateSlug} templateName={templateName} userId={userId} template={template} />
+      </Suspense>
     </div>
   )
 }
