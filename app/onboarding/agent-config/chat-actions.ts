@@ -94,11 +94,26 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
     // Step 3: Build messages for OpenAI
     const messages = []
 
+    // Calculate target response length based on user message length
+    const userMessageLength = userMessage?.length || 20
+    const minLength = 10
+    const maxLength = 164
+
+    // Scale response length based on user message length
+    // Short user messages get shorter responses, longer messages get longer responses
+    const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(userMessageLength * 1.5)))
+
     const systemPrompt = `You are a professional ${templateName} AI assistant. You are helping someone configure an AI agent like yourself.
 
-Be intelligent, helpful, and professional. Respond naturally to whatever they say and help them understand how to set up their agent effectively.
+IMPORTANT FORMATTING INSTRUCTIONS:
+1. Always start your response with a simple greeting and question
+2. Keep your response between ${minLength} and ${maxLength} characters
+3. Target response length: approximately ${targetLength} characters
+4. Be concise but helpful
+5. Use a conversational, friendly tone
+6. If the user asks a complex question, break it down into simpler parts
 
-Ask relevant questions to understand their needs and provide specific, actionable advice.`
+Your role is to be helpful, friendly, and concise.`
 
     messages.push({ role: "system", content: systemPrompt })
 
@@ -115,7 +130,7 @@ Ask relevant questions to understand their needs and provide specific, actionabl
     if (isInitial) {
       messages.push({
         role: "user",
-        content: `Hello! I want to set up a ${templateName} AI agent. Please introduce yourself and ask me what I need help with.`,
+        content: `Hello! I want to set up a ${templateName} AI agent.`,
       })
     }
 
@@ -404,6 +419,12 @@ export async function acceptSuggestion(
 
     console.log(`🚀 Making REAL API call to process accepted suggestion...`)
 
+    // Calculate target response length based on suggestion length
+    const suggestionLength = suggestion.length
+    const minLength = 10
+    const maxLength = 164
+    const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(suggestionLength * 1.2)))
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -415,7 +436,14 @@ export async function acceptSuggestion(
         messages: [
           {
             role: "system",
-            content: "The user accepted a suggestion. Provide a helpful response and update their agent configuration.",
+            content: `The user accepted a suggestion. Provide a helpful response and update their agent configuration.
+            
+IMPORTANT FORMATTING INSTRUCTIONS:
+1. Always start your response with a simple greeting and question
+2. Keep your response between ${minLength} and ${maxLength} characters
+3. Target response length: approximately ${targetLength} characters
+4. Be concise but helpful
+5. Use a conversational, friendly tone`,
           },
           {
             role: "user",
