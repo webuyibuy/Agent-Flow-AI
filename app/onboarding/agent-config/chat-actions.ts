@@ -401,9 +401,9 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName || "AI"} assistant`
     const templateSlug = agentData.templateSlug || "custom"
-    const timestamp = new Date().toISOString()
 
     // Step 2: Use the new SQL function to safely create the agent
+    console.log(`🔧 [DEBUG] Calling create_agent_safely SQL function...`)
     const { data: result, error: sqlError } = await supabase.rpc("create_agent_safely", {
       p_name: agentName,
       p_goal: agentGoal,
@@ -428,14 +428,17 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       }
     }
 
+    // Extract the agent_id and owner_id from the result
     const agentId = result[0].agent_id
     const profileId = result[0].owner_id
 
     console.log(`✅ [DEBUG] Agent created successfully with ID: ${agentId}`)
     console.log(`✅ [DEBUG] Using profile ID: ${profileId}`)
 
-    // Step 4: Store conversation data
+    // Step 3: Store conversation data
     try {
+      const timestamp = new Date().toISOString()
+
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agentId,
         owner_id: profileId,
@@ -468,7 +471,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       console.warn(`⚠️ [DEBUG] Warning: Error storing conversation data:`, customDataError)
     }
 
-    // Step 5: Start the agent with intelligent orchestration
+    // Step 4: Start the agent with intelligent orchestration
     try {
       console.log(`🚀 [DEBUG] Starting agent orchestration...`)
 
@@ -485,7 +488,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       // Don't fail the whole operation for this
     }
 
-    // Step 6: Revalidate paths
+    // Step 5: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
     revalidatePath(`/dashboard/agents/${agentId}`)
