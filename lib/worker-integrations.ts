@@ -208,7 +208,10 @@ export async function executeLyzrAgent(request: LyzrAgentRequest): Promise<Workf
 /**
  * Helper function to determine the best integration for a given task
  */
-export function selectIntegrationForTask(taskDescription: string, agentType: string): "n8n" | "lyzr" | "none" {
+export async function selectIntegrationForTask(
+  taskDescription: string,
+  agentType: string,
+): Promise<"n8n" | "lyzr" | "none"> {
   const taskLower = taskDescription.toLowerCase()
 
   // Keywords that suggest n8n workflow automation
