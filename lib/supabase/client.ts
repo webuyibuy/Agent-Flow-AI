@@ -60,3 +60,6 @@ export function getSupabaseBrowserClient(): SupabaseClient {
 export function resetSupabaseClient() {
   supabaseClient = null
 }
+
+// Named export for createClient (required by other parts of the codebase)
+export { getSupabaseBrowserClient as createClient }
