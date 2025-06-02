@@ -1,17 +1,6 @@
-// Mock Supabase client implementation (no external dependencies)
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+// Complete mock Supabase client implementation (no external dependencies)
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key"
-
-const supabaseClient = createSupabaseClient(supabaseUrl, supabaseAnonKey)
-
-export const supabase = supabaseClient
-
-// Named export for compatibility
-export const SupabaseClient = () => supabase
-
-export interface MockSupabaseClient {
+export interface SupabaseClient {
   auth: {
     getSession: () => Promise<{ data: { session: null }; error: null }>
     getUser: () => Promise<{ data: { user: null }; error: null }>
@@ -20,36 +9,39 @@ export interface MockSupabaseClient {
     signOut: () => Promise<{ error: null }>
     onAuthStateChange: (callback: any) => { data: { subscription: { unsubscribe: () => void } } }
   }
-  from: (table: string) => MockQueryBuilder
+  from: (table: string) => QueryBuilder
 }
 
-interface MockQueryBuilder {
-  select: (columns?: string) => MockQueryBuilder
-  insert: (data: any) => MockQueryBuilder
-  update: (data: any) => MockQueryBuilder
-  delete: () => MockQueryBuilder
-  eq: (column: string, value: any) => MockQueryBuilder
-  neq: (column: string, value: any) => MockQueryBuilder
-  gt: (column: string, value: any) => MockQueryBuilder
-  gte: (column: string, value: any) => MockQueryBuilder
-  lt: (column: string, value: any) => MockQueryBuilder
-  lte: (column: string, value: any) => MockQueryBuilder
-  like: (column: string, pattern: string) => MockQueryBuilder
-  ilike: (column: string, pattern: string) => MockQueryBuilder
-  in: (column: string, values: any[]) => MockQueryBuilder
-  is: (column: string, value: any) => MockQueryBuilder
-  order: (column: string, options?: { ascending?: boolean }) => MockQueryBuilder
-  limit: (count: number) => MockQueryBuilder
-  range: (from: number, to: number) => MockQueryBuilder
+interface QueryBuilder {
+  select: (columns?: string) => QueryBuilder
+  insert: (data: any) => QueryBuilder
+  update: (data: any) => QueryBuilder
+  delete: () => QueryBuilder
+  eq: (column: string, value: any) => QueryBuilder
+  neq: (column: string, value: any) => QueryBuilder
+  gt: (column: string, value: any) => QueryBuilder
+  gte: (column: string, value: any) => QueryBuilder
+  lt: (column: string, value: any) => QueryBuilder
+  lte: (column: string, value: any) => QueryBuilder
+  like: (column: string, pattern: string) => QueryBuilder
+  ilike: (column: string, pattern: string) => QueryBuilder
+  in: (column: string, values: any[]) => QueryBuilder
+  is: (column: string, value: any) => QueryBuilder
+  order: (column: string, options?: { ascending?: boolean }) => QueryBuilder
+  limit: (count: number) => QueryBuilder
+  range: (from: number, to: number) => QueryBuilder
   single: () => Promise<{ data: any | null; error: null }>
   maybeSingle: () => Promise<{ data: any | null; error: null }>
   then: (resolve: (value: { data: any[]; error: null }) => void) => void
 }
 
-function createMockQueryBuilder(): MockQueryBuilder {
-  const mockData = [{ id: "1", display_name: "Demo User", email: "user@example.com" }]
+function createQueryBuilder(): QueryBuilder {
+  const mockData = [
+    { id: "1", display_name: "Demo User", email: "user@example.com", created_at: new Date().toISOString() },
+    { id: "2", display_name: "Test Agent", email: "agent@example.com", created_at: new Date().toISOString() },
+  ]
 
-  const builder: MockQueryBuilder = {
+  const builder: QueryBuilder = {
     select: () => builder,
     insert: () => builder,
     update: () => builder,
@@ -75,7 +67,7 @@ function createMockQueryBuilder(): MockQueryBuilder {
   return builder
 }
 
-function createMockClient(): MockSupabaseClient {
+function createMockSupabaseClient(): SupabaseClient {
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
@@ -85,23 +77,26 @@ function createMockClient(): MockSupabaseClient {
       signOut: async () => ({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
-    from: () => createMockQueryBuilder(),
+    from: () => createQueryBuilder(),
   }
 }
 
-let mockClient: MockSupabaseClient | null = null
+let clientInstance: SupabaseClient | null = null
 
-export function getSupabaseBrowserClient(): MockSupabaseClient {
-  if (!mockClient) {
-    mockClient = createMockClient()
+export function getSupabaseBrowserClient(): SupabaseClient {
+  if (!clientInstance) {
+    clientInstance = createMockSupabaseClient()
     console.log("🔄 Using mock Supabase browser client")
   }
-  return mockClient
+  return clientInstance
 }
 
 export function resetSupabaseClient() {
-  mockClient = null
+  clientInstance = null
 }
 
 // Named export for createClient (required by other parts of the codebase)
-export const createClient = createSupabaseClient
+export const createClient = getSupabaseBrowserClient
+
+// Default export
+export default getSupabaseBrowserClient

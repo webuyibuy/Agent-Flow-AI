@@ -19,11 +19,14 @@ import { completeTaskAndMoveToHistory } from "@/app/dashboard/dependencies/actio
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { getSupabaseFromServer } from "@/lib/supabase/server"
 import type { User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 import { useActionState } from "@/hooks/useActionState" // Import useActionState hook
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const supabase = getSupabaseFromServer()
+  const { data: agents } = await supabase.from("agents").select("*").limit(5)
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error" | "unauthenticated">(
@@ -41,14 +44,14 @@ export default function DashboardPage() {
 
   // Auth handling
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient()
+    const supabaseClient = getSupabaseBrowserClient()
 
     const fetchUser = async () => {
       try {
         const {
           data: { session },
           error: sessionError,
-        } = await supabase.auth.getSession()
+        } = await supabaseClient.auth.getSession()
 
         if (sessionError || !session) {
           setConnectionStatus("unauthenticated")
@@ -60,7 +63,7 @@ export default function DashboardPage() {
         const {
           data: { user },
           error: userError,
-        } = await supabase.auth.getUser()
+        } = await supabaseClient.auth.getUser()
 
         if (userError || !user) {
           setConnectionStatus("unauthenticated")
@@ -82,7 +85,7 @@ export default function DashboardPage() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setCurrentUser(null)
         setConnectionStatus("unauthenticated")
@@ -105,10 +108,10 @@ export default function DashboardPage() {
     setLoading(true)
 
     try {
-      const supabase = getSupabaseBrowserClient()
+      const supabaseClient = getSupabaseBrowserClient()
 
       // Fetch agents
-      const { data: agents, error: agentsError } = await supabase
+      const { data: agentsDataFromClient, error: agentsError } = await supabaseClient
         .from("agents")
         .select("*")
         .eq("owner_id", user.id)
@@ -118,11 +121,11 @@ export default function DashboardPage() {
         console.error("Error loading agents:", agentsError.message)
         setAgentsData([])
       } else {
-        setAgentsData(agents || [])
+        setAgentsData(agentsDataFromClient || [])
       }
 
       // Fetch user's active tasks (from dependencies)
-      const { data: tasks, error: tasksError } = await supabase
+      const { data: tasks, error: tasksError } = await supabaseClient
         .from("tasks")
         .select(`
           *,
@@ -215,6 +218,26 @@ export default function DashboardPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
             Manage your agents and complete tasks they need help with
           </p>
+        </div>
+      </div>
+
+      {/* Recent Agents Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Recent Agents</h2>
+        <div style={{ display: "grid", gap: "1rem", marginTop: "1rem" }}>
+          {agents?.map((agent: any) => (
+            <div
+              key={agent.id}
+              style={{
+                padding: "1rem",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+              }}
+            >
+              <h3>{agent.display_name}</h3>
+              <p>{agent.email}</p>
+            </div>
+          ))}
         </div>
       </div>
 

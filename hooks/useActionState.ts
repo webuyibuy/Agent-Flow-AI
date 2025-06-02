@@ -2,23 +2,23 @@
 
 import { useState, useTransition } from "react"
 
-type ActionState<T> = {
+export interface ActionState<T = any> {
   data?: T
   error?: string
   success?: boolean
 }
 
-export function useActionState<T, P>(
-  action: (prevState: ActionState<T>, formData: P) => Promise<ActionState<T>>,
-  initialState: ActionState<T>,
-): [ActionState<T>, (formData: P) => void, boolean] {
-  const [state, setState] = useState<ActionState<T>>(initialState)
+export function useActionState<T = any>(
+  action: (formData: FormData) => Promise<ActionState<T>>,
+  initialState?: ActionState<T>,
+): [ActionState<T>, (formData: FormData) => void, boolean] {
+  const [state, setState] = useState<ActionState<T>>(initialState || {})
   const [isPending, startTransition] = useTransition()
 
-  const formAction = (formData: P) => {
+  const formAction = (formData: FormData) => {
     startTransition(async () => {
       try {
-        const result = await action(state, formData)
+        const result = await action(formData)
         setState(result)
       } catch (error) {
         setState({

@@ -1,19 +1,22 @@
-export default function Home() {
+export default function HomePage() {
   return (
-    <main style={{ padding: "2rem", fontFamily: "system-ui" }}>
-      <h1>AgentFlow Platform</h1>
-      <p>AI Agent Management Platform</p>
+    <div>
+      <h1>Welcome to AgentFlow Platform</h1>
+      <p>AI Agent Management Made Simple</p>
       <div style={{ marginTop: "2rem" }}>
-        <h2>Quick Links</h2>
-        <ul>
-          <li>
-            <a href="/dashboard">Dashboard</a>
-          </li>
-          <li>
-            <a href="/login">Login</a>
-          </li>
-        </ul>
+        <a
+          href="/dashboard"
+          style={{
+            padding: "0.5rem 1rem",
+            backgroundColor: "#0070f3",
+            color: "white",
+            textDecoration: "none",
+            borderRadius: "4px",
+          }}
+        >
+          Go to Dashboard
+        </a>
       </div>
-    </main>
+    </div>
   )
 }
