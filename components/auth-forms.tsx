@@ -35,20 +35,22 @@ export function SignInForm({ onSwitchForm }: AuthFormProps) {
       setError(signInError.message)
     } else {
       setMessage("Signed in successfully! Redirecting...")
+      // Supabase client handles session and redirect automatically if successful
     }
     setLoading(false)
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8 mx-auto">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">AgentFlow</h1>
-        <p className="text-gray-600 dark:text-gray-400 text-base">Sign in to manage your AI agents</p>
+    <div className="w-full max-w-sm space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold" style={{ color: "#007AFF" }}>
+          AgentFlow
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400">Sign in to manage your AI agents</p>
       </div>
-
-      <form onSubmit={handleSignIn} className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="email-signin" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+      <form onSubmit={handleSignIn} className="space-y-4">
+        <div>
+          <Label htmlFor="email-signin" className="text-gray-700">
             Email
           </Label>
           <Input
@@ -58,12 +60,11 @@ export function SignInForm({ onSwitchForm }: AuthFormProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password-signin" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <div>
+          <Label htmlFor="password-signin" className="text-gray-700">
             Password
           </Label>
           <Input
@@ -73,54 +74,37 @@ export function SignInForm({ onSwitchForm }: AuthFormProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <Button
-          type="submit"
-          className="w-full h-12 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
-        >
+        <Button type="submit" className="w-full bg-[#007AFF] hover:bg-[#0056b3] text-white" disabled={loading}>
           {loading ? "Signing In..." : "Sign In"}
         </Button>
       </form>
-
-      <div className="text-center space-y-4">
-        <button
-          onClick={() => onSwitchForm("signup")}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
-        >
+      <div className="text-center text-sm">
+        <button onClick={() => onSwitchForm("signup")} className="text-[#007AFF] hover:underline">
           Don't have an account? Sign Up
         </button>
         <br />
-        <button
-          onClick={() => onSwitchForm("forgot-password")}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
-        >
+        <button onClick={() => onSwitchForm("forgot-password")} className="text-[#007AFF] hover:underline mt-2">
           Forgot your password?
         </button>
       </div>
-
       {message && (
-        <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-          <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <AlertTitle className="text-blue-800 dark:text-blue-200">Success</AlertTitle>
-          <AlertDescription className="text-blue-700 dark:text-blue-300">{message}</AlertDescription>
+        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700">
+          <Terminal className="h-4 w-4 !text-blue-700" />
+          <AlertTitle>Heads up!</AlertTitle>
+          <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
-
       {error && (
-        <Alert className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-          <Terminal className="h-4 w-4 text-red-600 dark:text-red-400" />
-          <AlertTitle className="text-red-800 dark:text-red-200">Error</AlertTitle>
-          <AlertDescription className="text-red-700 dark:text-red-300">{error}</AlertDescription>
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
-      <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-        By signing in, you agree to our Terms of Service
-      </p>
+      <p className="text-xs text-center text-gray-500">By signing in, you agree to our imaginary Terms of Service.</p>
     </div>
   )
 }
@@ -145,7 +129,7 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
       password,
       options: {
         data: {
-          username,
+          username, // Pass username to the user metadata
         },
       },
     })
@@ -153,7 +137,11 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
     if (signUpError) {
       setError(signUpError.message)
     } else if (data.user) {
+      // If email confirmation is required, Supabase sends a magic link.
+      // If not, the user is signed in directly.
       setMessage("Sign up successful! Please check your email to confirm your account.")
+      // For direct sign-in, you might want to redirect here
+      // router.push('/dashboard');
     } else {
       setMessage("Sign up successful! Please check your email to confirm your account.")
     }
@@ -161,15 +149,16 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8 mx-auto">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">AgentFlow</h1>
-        <p className="text-gray-600 dark:text-gray-400 text-base">Create your AI AgentFlow account</p>
+    <div className="w-full max-w-sm space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold" style={{ color: "#007AFF" }}>
+          AgentFlow
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400">Create your AI AgentFlow account</p>
       </div>
-
-      <form onSubmit={handleSignUp} className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="username-signup" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+      <form onSubmit={handleSignUp} className="space-y-4">
+        <div>
+          <Label htmlFor="username-signup" className="text-gray-700">
             Username
           </Label>
           <Input
@@ -179,12 +168,11 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="email-signup" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <div>
+          <Label htmlFor="email-signup" className="text-gray-700">
             Email
           </Label>
           <Input
@@ -194,12 +182,11 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password-signup" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <div>
+          <Label htmlFor="password-signup" className="text-gray-700">
             Password
           </Label>
           <Input
@@ -209,47 +196,33 @@ export function SignUpForm({ onSwitchForm }: AuthFormProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <Button
-          type="submit"
-          className="w-full h-12 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
-        >
+        <Button type="submit" className="w-full bg-[#007AFF] hover:bg-[#0056b3] text-white" disabled={loading}>
           {loading ? "Signing Up..." : "Sign Up"}
         </Button>
       </form>
-
-      <div className="text-center">
-        <button
-          onClick={() => onSwitchForm("signin")}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
-        >
+      <div className="text-center text-sm">
+        <button onClick={() => onSwitchForm("signin")} className="text-[#007AFF] hover:underline">
           Already have an account? Sign In
         </button>
       </div>
-
       {message && (
-        <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-          <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <AlertTitle className="text-blue-800 dark:text-blue-200">Success</AlertTitle>
-          <AlertDescription className="text-blue-700 dark:text-blue-300">{message}</AlertDescription>
+        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700">
+          <Terminal className="h-4 w-4 !text-blue-700" />
+          <AlertTitle>Heads up!</AlertTitle>
+          <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
-
       {error && (
-        <Alert className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-          <Terminal className="h-4 w-4 text-red-600 dark:text-red-400" />
-          <AlertTitle className="text-red-800 dark:text-red-200">Error</AlertTitle>
-          <AlertDescription className="text-red-700 dark:text-red-300">{error}</AlertDescription>
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
-      <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-        By signing up, you agree to our Terms of Service
-      </p>
+      <p className="text-xs text-center text-gray-500">By signing up, you agree to our imaginary Terms of Service.</p>
     </div>
   )
 }
@@ -280,15 +253,16 @@ export function ForgotPasswordForm({ onSwitchForm }: AuthFormProps) {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8 mx-auto">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">AgentFlow</h1>
-        <p className="text-gray-600 dark:text-gray-400 text-base">Reset your password</p>
+    <div className="w-full max-w-sm space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold" style={{ color: "#007AFF" }}>
+          AgentFlow
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400">Reset your password</p>
       </div>
-
-      <form onSubmit={handlePasswordReset} className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="email-forgot" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+      <form onSubmit={handlePasswordReset} className="space-y-4">
+        <div>
+          <Label htmlFor="email-forgot" className="text-gray-700">
             Email
           </Label>
           <Input
@@ -298,41 +272,30 @@ export function ForgotPasswordForm({ onSwitchForm }: AuthFormProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-12 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-all duration-200"
+            className="mt-1"
           />
         </div>
-
-        <Button
-          type="submit"
-          className="w-full h-12 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
-        >
+        <Button type="submit" className="w-full bg-[#007AFF] hover:bg-[#0056b3] text-white" disabled={loading}>
           {loading ? "Sending..." : "Send Reset Link"}
         </Button>
       </form>
-
-      <div className="text-center">
-        <button
-          onClick={() => onSwitchForm("signin")}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
-        >
+      <div className="text-center text-sm">
+        <button onClick={() => onSwitchForm("signin")} className="text-[#007AFF] hover:underline">
           Back to Sign In
         </button>
       </div>
-
       {message && (
-        <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-          <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <AlertTitle className="text-blue-800 dark:text-blue-200">Success</AlertTitle>
-          <AlertDescription className="text-blue-700 dark:text-blue-300">{message}</AlertDescription>
+        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700">
+          <Terminal className="h-4 w-4 !text-blue-700" />
+          <AlertTitle>Heads up!</AlertTitle>
+          <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
-
       {error && (
-        <Alert className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-          <Terminal className="h-4 w-4 text-red-600 dark:text-red-400" />
-          <AlertTitle className="text-red-800 dark:text-red-200">Error</AlertTitle>
-          <AlertDescription className="text-red-700 dark:text-red-300">{error}</AlertDescription>
+        <Alert variant="destructive">
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
     </div>

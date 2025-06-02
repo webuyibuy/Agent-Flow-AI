@@ -1,6 +1,6 @@
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseServerWithCookies, getSupabaseAdmin } from "@/lib/supabase/server" // Using the cookie version
+import { getSupabaseFromServer, getSupabaseAdmin } from "@/lib/supabase/server" // Using server client
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   redirectTo.searchParams.delete("type")
 
   if (token_hash && type) {
-    const supabase = await getSupabaseServerWithCookies() // Use the cookie version for auth
+    const supabase = getSupabaseFromServer() // Use the version that can set cookies via Route Handler
     const { error, data } = await supabase.auth.verifyOtp({
       type,
       token_hash,

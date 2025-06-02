@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useActionState } from "react"
 import {
   CheckCircleIcon,
   PlusCircle,
@@ -12,28 +12,30 @@ import {
   AlertTriangle,
   Zap,
 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { completeTaskAndMoveToHistory } from "@/app/dashboard/dependencies/actions"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { motion } from "framer-motion"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
-import { getSupabaseFromServer } from "@/lib/supabase/server"
 import type { User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
-import { useActionState } from "@/hooks/useActionState" // Import useActionState hook
 
-export default async function DashboardPage() {
-  const supabase = getSupabaseFromServer()
-  const { data: agents } = await supabase.from("agents").select("*").limit(5)
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: { created?: string }
+}) {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error" | "unauthenticated">(
     "checking",
   )
-  const [agentsData, setAgentsData] = useState<any[]>([])
-  const [tasksData, setTasksData] = useState<any[]>([])
+  const [agents, setAgents] = useState<any[]>([])
+  const [activeTasks, setActiveTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
 
@@ -44,14 +46,14 @@ export default async function DashboardPage() {
 
   // Auth handling
   useEffect(() => {
-    const supabaseClient = getSupabaseBrowserClient()
+    const supabase = getSupabaseBrowserClient()
 
     const fetchUser = async () => {
       try {
         const {
           data: { session },
           error: sessionError,
-        } = await supabaseClient.auth.getSession()
+        } = await supabase.auth.getSession()
 
         if (sessionError || !session) {
           setConnectionStatus("unauthenticated")
@@ -63,7 +65,7 @@ export default async function DashboardPage() {
         const {
           data: { user },
           error: userError,
-        } = await supabaseClient.auth.getUser()
+        } = await supabase.auth.getUser()
 
         if (userError || !user) {
           setConnectionStatus("unauthenticated")
@@ -85,7 +87,7 @@ export default async function DashboardPage() {
 
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setCurrentUser(null)
         setConnectionStatus("unauthenticated")
@@ -108,10 +110,10 @@ export default async function DashboardPage() {
     setLoading(true)
 
     try {
-      const supabaseClient = getSupabaseBrowserClient()
+      const supabase = getSupabaseBrowserClient()
 
       // Fetch agents
-      const { data: agentsDataFromClient, error: agentsError } = await supabaseClient
+      const { data: agentsData, error: agentsError } = await supabase
         .from("agents")
         .select("*")
         .eq("owner_id", user.id)
@@ -119,13 +121,13 @@ export default async function DashboardPage() {
 
       if (agentsError) {
         console.error("Error loading agents:", agentsError.message)
-        setAgentsData([])
+        setAgents([])
       } else {
-        setAgentsData(agentsDataFromClient || [])
+        setAgents(agentsData || [])
       }
 
       // Fetch user's active tasks (from dependencies)
-      const { data: tasks, error: tasksError } = await supabaseClient
+      const { data: tasksData, error: tasksError } = await supabase
         .from("tasks")
         .select(`
           *,
@@ -140,17 +142,17 @@ export default async function DashboardPage() {
 
       if (tasksError) {
         console.error("Error loading active tasks:", tasksError.message)
-        setTasksData([])
+        setActiveTasks([])
       } else {
-        setTasksData(tasks || [])
+        setActiveTasks(tasksData || [])
       }
 
       setConnectionStatus("connected")
     } catch (error: any) {
       console.error("Critical error in loadData:", error.message)
       setConnectionStatus("error")
-      setAgentsData([])
-      setTasksData([])
+      setAgents([])
+      setActiveTasks([])
     } finally {
       setLoading(false)
     }
@@ -165,9 +167,11 @@ export default async function DashboardPage() {
   // Handle task completion
   useEffect(() => {
     if (completionState?.success && completionState.taskId) {
-      setTasksData((prevTasks) => prevTasks.filter((task) => task.id !== completionState.taskId))
+      setActiveTasks((prevTasks) => prevTasks.filter((task) => task.id !== completionState.taskId))
     }
   }, [completionState])
+
+  const isNewlyCreated = searchParams?.created === "true"
 
   // Loading state
   if (loading && connectionStatus === "checking") {
@@ -211,74 +215,84 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Success message for new agent */}
+      {isNewlyCreated && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <Alert className="bg-green-50 border-green-200 text-green-800">
+            <CheckCircleIcon className="h-5 w-5" />
+            <AlertTitle className="font-medium">🎉 Agent Created Successfully!</AlertTitle>
+            <AlertDescription>
+              Your agent is now analyzing your goal and starting to work. You'll see its thinking process below.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Task completion feedback */}
+      {completionState?.message && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <Alert
+            className={
+              completionState.success
+                ? "bg-green-50 border-green-200 text-green-700"
+                : "bg-red-50 border-red-200 text-red-700"
+            }
+          >
+            <CheckCircleIcon className="h-5 w-5" />
+            <AlertTitle>{completionState.success ? "Task Completed!" : "Error"}</AlertTitle>
+            <AlertDescription>{completionState.message}</AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="space-y-6 sm:space-y-8">
         <div className="px-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Your AI Workspace</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Your AI Workspace</h1>
+          <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
             Manage your agents and complete tasks they need help with
           </p>
         </div>
       </div>
 
-      {/* Recent Agents Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Recent Agents</h2>
-        <div style={{ display: "grid", gap: "1rem", marginTop: "1rem" }}>
-          {agents?.map((agent: any) => (
-            <div
-              key={agent.id}
-              style={{
-                padding: "1rem",
-                border: "1px solid #ccc",
-                borderRadius: "4px",
-              }}
-            >
-              <h3>{agent.display_name}</h3>
-              <p>{agent.email}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* User Tasks Section - Clean Apple Design */}
-      <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm">
+      {/* User Tasks Section */}
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <CheckCircleIcon className="h-5 w-5 text-blue-600" />
               </div>
-              <CardTitle className="text-gray-900 dark:text-white">Tasks for You ({tasksData.length})</CardTitle>
+              <CardTitle>Tasks for You ({activeTasks.length})</CardTitle>
             </div>
             <Link
               href="/dashboard/dependencies"
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
             >
               <Clock className="h-4 w-4" />
               View All Dependencies
             </Link>
           </div>
         </CardHeader>
-        <CardContent className="bg-white dark:bg-gray-900">
-          {tasksData.length === 0 ? (
+        <CardContent>
+          {activeTasks.length === 0 ? (
             <div className="text-center py-12">
-              <FileText className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No tasks for you right now</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks for you right now</h3>
+              <p className="text-gray-600 mb-6">
                 Your agents are working autonomously. When they need your help, tasks will appear here.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Link
                   href="/dashboard/dependencies"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   <Clock className="h-4 w-4" />
                   Check Dependencies
                 </Link>
                 <Link
                   href="/dashboard/agents/new"
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   <PlusCircle className="h-4 w-4" />
                   Create Another Agent
@@ -287,10 +301,10 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {tasksData.map((task) => (
+              {activeTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                  className="border border-blue-200 bg-blue-50 rounded-lg p-3 sm:p-4 hover:bg-blue-100 transition-colors"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <form action={completeTaskFormAction} className="mt-1">
@@ -311,18 +325,15 @@ export default async function DashboardPage() {
                     </form>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-semibold text-gray-900 dark:text-white">{task.title}</h4>
+                        <h4 className="font-semibold text-gray-900">{task.title}</h4>
                         {isCompletingTask && completionState?.taskId === task.id && (
-                          <Badge
-                            variant="outline"
-                            className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700"
-                          >
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                             Completing...
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                         <span className="flex items-center gap-1">
                           <Bot className="h-3 w-3" />
                           {task.agents?.name}
@@ -333,21 +344,17 @@ export default async function DashboardPage() {
                         </span>
                       </div>
                       {task.metadata?.user_notes && (
-                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60 p-2 rounded">
-                          {task.metadata.user_notes}
-                        </p>
+                        <p className="text-sm text-gray-700 bg-white/60 p-2 rounded">{task.metadata.user_notes}</p>
                       )}
                     </div>
                   </div>
                 </div>
               ))}
               <div className="text-center pt-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                  ✅ Check the box when you complete a task
-                </p>
+                <p className="text-sm text-gray-500 mb-2">✅ Check the box when you complete a task</p>
                 <Link
                   href="/dashboard/dependencies"
-                  className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
                 >
                   <ArrowRight className="h-4 w-4" />
                   View all dependencies
@@ -360,28 +367,28 @@ export default async function DashboardPage() {
 
       {/* Agents Overview */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Agents ({agentsData.length})</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">Your Agents ({agents.length})</h2>
         <Link
           href="/dashboard/agents/new"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
         >
           <PlusCircle className="h-4 w-4" />
           Create Agent
         </Link>
       </div>
 
-      {agentsData.length === 0 ? (
-        <Card className="border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
+      {agents.length === 0 ? (
+        <Card className="border-2 border-dashed border-gray-300">
           <CardContent className="py-16 text-center">
-            <Zap className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Create Your First AI Agent</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
+            <Zap className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">Create Your First AI Agent</h3>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
               Tell your agent what you want to achieve, and it will start working immediately while showing you its
               thinking process.
             </p>
             <Link
               href="/dashboard/agents/new"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-colors"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md"
             >
               <PlusCircle className="h-5 w-5" />
               Create Your First Agent
@@ -391,16 +398,13 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {agentsData.map((agent) => (
-            <Card
-              key={agent.id}
-              className="hover:shadow-md transition-shadow bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
-            >
+          {agents.map((agent) => (
+            <Card key={agent.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-lg text-gray-900 dark:text-white">{agent.name}</CardTitle>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{agent.goal}</p>
+                    <CardTitle className="text-lg">{agent.name}</CardTitle>
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{agent.goal}</p>
                   </div>
                   <Badge variant={agent.status === "active" ? "default" : "secondary"}>{agent.status}</Badge>
                 </div>
@@ -408,7 +412,7 @@ export default async function DashboardPage() {
               <CardContent>
                 <Link
                   href={`/dashboard/agents/${agent.id}`}
-                  className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
                 >
                   View Details <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -417,26 +421,6 @@ export default async function DashboardPage() {
           ))}
         </div>
       )}
-
-      {/* Mock Data Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Mock Data</h2>
-        <ul className="list-disc list-inside">
-          <li>Agent 1: Active</li>
-          <li>Agent 2: Inactive</li>
-          <li>Agent 3: Processing</li>
-        </ul>
-      </div>
-
-      {/* Back to Home Link */}
-      <div className="text-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-        >
-          Back to Home
-        </Link>
-      </div>
     </div>
   )
 }

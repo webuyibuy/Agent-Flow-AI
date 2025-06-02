@@ -1,37 +1,20 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { ThemeProvider } from "@/lib/theme-manager"
+import type { Metadata } from 'next'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "AgentFlow Platform",
-  description: "AI Agent Management Platform",
-    generator: 'v0.dev'
+  title: 'v0 App',
+  description: 'Created with v0',
+  generator: 'v0.dev',
 }
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
     <html lang="en">
-      <body>
-        <ThemeProvider>
-          <nav style={{ padding: "1rem", borderBottom: "1px solid #ccc" }}>
-            <a href="/" style={{ marginRight: "1rem" }}>
-              Home
-            </a>
-            <a href="/dashboard" style={{ marginRight: "1rem" }}>
-              Dashboard
-            </a>
-            <a href="/login">Login</a>
-          </nav>
-          <main style={{ padding: "2rem" }}>{children}</main>
-        </ThemeProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
-
-
-import './globals.css'

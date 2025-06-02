@@ -24,7 +24,6 @@ import NotificationCenter from "@/components/notification-center"
 import { motion } from "framer-motion"
 import { ProfileUpdater } from "./profile-updater"
 import AdvancedSearch from "@/components/advanced-search"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 interface NavItem {
   href: string
@@ -79,17 +78,17 @@ export default function DashboardLayoutClient({
   }, [])
 
   return (
-    <div className="flex min-h-screen w-full bg-white dark:bg-black dashboard-layout">
+    <div className="flex min-h-screen w-full bg-[#f2f2f7] dark:bg-[#1c1c1e]">
       <ProfileUpdater />
-      {/* Desktop Sidebar - Apple clean design */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-xl sm:flex">
-        <nav className="flex flex-col gap-1 p-6">
+      {/* Desktop Sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#e5e5ea] bg-white/80 backdrop-blur-xl dark:border-[#3a3a3c] dark:bg-[#2c2c2e]/80 sm:flex">
+        <nav className="flex flex-col gap-1 p-4">
           <Link
             href="/dashboard"
-            className="mb-8 flex items-center gap-3 text-xl font-semibold text-blue-600 dark:text-blue-400"
+            className="mb-8 flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]"
             prefetch={false}
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
               <ZapIcon className="h-6 w-6 text-white" />
             </div>
             <span>AgentFlow</span>
@@ -99,22 +98,22 @@ export default function DashboardLayoutClient({
             <Button
               key={item.label}
               variant="ghost"
-              className="w-full justify-start text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white font-medium"
+              className="w-full justify-start text-[#1c1c1e] dark:text-white"
               asChild
             >
-              <Link href={item.href} prefetch={false} className="flex items-center gap-3 py-3 px-3 rounded-lg">
+              <Link href={item.href} prefetch={false} className="flex items-center gap-3 py-3">
                 <item.icon className="h-5 w-5" />
                 {item.label}
-                <ChevronRightIcon className="ml-auto h-4 w-4 text-gray-400" />
+                <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
               </Link>
             </Button>
           ))}
         </nav>
 
-        <div className="mt-auto p-6 space-y-3">
-          {/* Template button - Apple green */}
+        <div className="mt-auto p-4 space-y-3">
+          {/* Template-based creation button - Green */}
           <Link href="/onboarding/templates" className="block">
-            <div className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-xl shadow-sm transition-all duration-200 p-4 cursor-pointer">
+            <div className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
               <div className="flex items-center justify-center gap-3">
                 <LayoutTemplateIcon className="h-5 w-5" />
                 Use Template
@@ -122,9 +121,9 @@ export default function DashboardLayoutClient({
             </div>
           </Link>
 
-          {/* New agent button - Apple blue */}
+          {/* Custom agent creation button - Blue */}
           <Link href="/dashboard/agents/new" className="block">
-            <div className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl shadow-sm transition-all duration-200 p-4 cursor-pointer">
+            <div className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
               <div className="flex items-center justify-center gap-3">
                 <PlusCircleIcon className="h-5 w-5" />
                 New Agent
@@ -134,25 +133,25 @@ export default function DashboardLayoutClient({
         </div>
 
         {/* User profile section */}
-        <div className="border-t border-gray-200 dark:border-gray-800 p-6">
+        <div className="border-t border-[#e5e5ea] p-4 dark:border-[#3a3a3c]">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white font-medium">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0071e3] text-white font-medium">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate text-gray-900 dark:text-white">{displayName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userEmail}</p>
+              <p className="font-medium truncate text-[#1c1c1e] dark:text-white">{displayName}</p>
+              <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2] truncate">{userEmail}</p>
             </div>
           </div>
         </div>
       </aside>
 
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-64 w-full">
-        {/* Header - Clean Apple style */}
+        {/* Header */}
         <motion.header
-          className={`sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-6 transition-all duration-200 ${
+          className={`sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 transition-all duration-200 ${
             scrolled
-              ? "bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
+              ? "bg-white/80 backdrop-blur-xl border-b border-[#e5e5ea] dark:bg-[#1c1c1e]/80 dark:border-[#3a3a3c]"
               : "bg-transparent"
           }`}
           initial={{ y: -10, opacity: 0 }}
@@ -169,11 +168,11 @@ export default function DashboardLayoutClient({
             </SheetTrigger>
             <SheetContent
               side="left"
-              className="sm:hidden w-80 p-0 flex flex-col border-r-0 bg-white/95 dark:bg-black/95 backdrop-blur-xl"
+              className="sm:hidden w-80 p-0 flex flex-col border-r-0 bg-white/95 backdrop-blur-xl dark:bg-[#1c1c1e]/95"
             >
-              <SheetHeader className="p-6 border-b border-gray-200 dark:border-gray-800">
-                <SheetTitle className="flex items-center gap-3 text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500">
+              <SheetHeader className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+                <SheetTitle className="flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
                     <ZapIcon className="h-6 w-6 text-white" />
                   </div>
                   <span>AgentFlow</span>
@@ -181,33 +180,37 @@ export default function DashboardLayoutClient({
               </SheetHeader>
 
               {/* User Info Section */}
-              <div className="p-6 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+              <div className="p-6 border-b border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white text-lg font-medium">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0071e3] text-white text-lg font-medium">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{displayName}</p>
+                    <p className="font-medium text-[#1c1c1e] dark:text-white">{displayName}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="flex items-center gap-1">
+                      <Badge variant="tinted" size="pill" className="flex items-center gap-1">
                         <StarIcon className="h-3 w-3" />
                         {totalXp} XP
                       </Badge>
-                      {currentBadge && <Badge variant="outline">{currentBadge.name}</Badge>}
+                      {currentBadge && (
+                        <Badge variant="secondary" size="pill">
+                          {currentBadge.name}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Navigation Links */}
-              <nav className="flex-1 flex flex-col gap-1 p-6 overflow-y-auto">
+              <nav className="flex-1 flex flex-col gap-1 p-4 overflow-y-auto">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.label + "-mobile"}>
-                    <Button variant="ghost" className="w-full justify-start h-14 text-base font-medium" asChild>
+                    <Button variant="ghost" className="w-full justify-start h-14 text-base touch-manipulation" asChild>
                       <Link href={item.href} prefetch={false} className="flex items-center gap-3">
                         <item.icon className="h-5 w-5" />
                         {item.label}
-                        <ChevronRightIcon className="ml-auto h-4 w-4 text-gray-400" />
+                        <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
                       </Link>
                     </Button>
                   </SheetClose>
@@ -215,7 +218,7 @@ export default function DashboardLayoutClient({
               </nav>
 
               {/* Action Buttons */}
-              <div className="p-6 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 space-y-3">
+              <div className="p-4 border-t border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e] space-y-3">
                 <SheetClose asChild>
                   <Button variant="outline" size="lg" className="w-full" asChild>
                     <Link href="/onboarding/templates" className="flex items-center gap-2">
@@ -225,7 +228,7 @@ export default function DashboardLayoutClient({
                   </Button>
                 </SheetClose>
                 <SheetClose asChild>
-                  <Button size="lg" className="w-full bg-blue-500 hover:bg-blue-600" asChild>
+                  <Button variant="filled" size="lg" className="w-full" asChild>
                     <Link href="/dashboard/agents/new" className="flex items-center gap-2">
                       <PlusCircleIcon className="h-5 w-5" />
                       Create New Agent
@@ -236,24 +239,27 @@ export default function DashboardLayoutClient({
                   <RealtimeStatusIndicator />
                 </div>
               </div>
+              {/* Mobile Search */}
+              <div className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+                <AdvancedSearch userId={user.id} className="w-full" />
+              </div>
             </SheetContent>
           </Sheet>
 
           <div className="flex-1 flex items-center justify-between">
-            {/* Desktop Search */}
+            {/* Desktop User Info with XP Badge */}
             <div className="hidden sm:flex items-center gap-4 flex-1 max-w-md">
               <AdvancedSearch userId={user.id} className="flex-1" />
             </div>
 
             <div className="flex items-center gap-3">
-              <ThemeToggle />
               <NotificationCenter />
               <RealtimeStatusIndicator />
             </div>
           </div>
         </motion.header>
 
-        <main className="flex-1 p-6 bg-white dark:bg-black">
+        <main className="flex-1 p-4 sm:p-6">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -263,7 +269,7 @@ export default function DashboardLayoutClient({
           </motion.div>
         </main>
 
-        <footer className="w-full p-4 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800 mt-auto bg-white/80 dark:bg-black/80 backdrop-blur-xl">
+        <footer className="w-full p-4 text-center text-xs text-[#8e8e93] dark:text-[#aeaeb2] border-t border-[#e5e5ea] dark:border-[#3a3a3c] mt-auto bg-white/80 backdrop-blur-xl dark:bg-[#2c2c2e]/80">
           AgentFlow &copy; {new Date().getFullYear()} • Designed for Apple Platforms
         </footer>
       </div>

@@ -1,108 +1,120 @@
-// Complete mock Supabase server implementation (no external dependencies)
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { ConnectionManager } from "./connection-manager"
 
-export interface SupabaseClient {
-  auth: {
-    getSession: () => Promise<{ data: { session: null }; error: null }>
-    getUser: () => Promise<{ data: { user: null }; error: null }>
-    signInWithPassword: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
-    signUp: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
-    signOut: () => Promise<{ error: null }>
-    onAuthStateChange: (callback: any) => { data: { subscription: { unsubscribe: () => void } } }
-  }
-  from: (table: string) => QueryBuilder
-}
+export function getSupabaseFromServer() {
+  const connectionManager = ConnectionManager.getInstance()
 
-interface QueryBuilder {
-  select: (columns?: string) => QueryBuilder
-  insert: (data: any) => QueryBuilder
-  update: (data: any) => QueryBuilder
-  delete: () => QueryBuilder
-  eq: (column: string, value: any) => QueryBuilder
-  neq: (column: string, value: any) => QueryBuilder
-  gt: (column: string, value: any) => QueryBuilder
-  gte: (column: string, value: any) => QueryBuilder
-  lt: (column: string, value: any) => QueryBuilder
-  lte: (column: string, value: any) => QueryBuilder
-  like: (column: string, pattern: string) => QueryBuilder
-  ilike: (column: string, pattern: string) => QueryBuilder
-  in: (column: string, values: any[]) => QueryBuilder
-  is: (column: string, value: any) => QueryBuilder
-  order: (column: string, options?: { ascending?: boolean }) => QueryBuilder
-  limit: (count: number) => QueryBuilder
-  range: (from: number, to: number) => QueryBuilder
-  single: () => Promise<{ data: any | null; error: null }>
-  maybeSingle: () => Promise<{ data: any | null; error: null }>
-  then: (resolve: (value: { data: any[]; error: null }) => void) => void
-}
-
-function createQueryBuilder(): QueryBuilder {
-  const mockData = [
-    { id: "1", display_name: "Demo User", email: "user@example.com", created_at: new Date().toISOString() },
-    { id: "2", display_name: "Test Agent", email: "agent@example.com", created_at: new Date().toISOString() },
-  ]
-
-  const builder: QueryBuilder = {
-    select: () => builder,
-    insert: () => builder,
-    update: () => builder,
-    delete: () => builder,
-    eq: () => builder,
-    neq: () => builder,
-    gt: () => builder,
-    gte: () => builder,
-    lt: () => builder,
-    lte: () => builder,
-    like: () => builder,
-    ilike: () => builder,
-    in: () => builder,
-    is: () => builder,
-    order: () => builder,
-    limit: () => builder,
-    range: () => builder,
-    single: async () => ({ data: mockData[0] || null, error: null }),
-    maybeSingle: async () => ({ data: mockData[0] || null, error: null }),
-    then: (resolve) => resolve({ data: mockData, error: null }),
+  if (!connectionManager.isConfigured()) {
+    console.log("🔄 Using mock Supabase server client - environment not configured")
+    return connectionManager.getMockClient()
   }
 
-  return builder
-}
+  try {
+    const config = connectionManager.getConfig()
 
-function createMockSupabaseClient(): SupabaseClient {
-  return {
-    auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      getUser: async () => ({ data: { user: null }, error: null }),
-      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
-      signUp: async () => ({ data: { user: null, session: null }, error: null }),
-      signOut: async () => ({ error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    },
-    from: () => createQueryBuilder(),
+    // For server-side usage, we'll use the admin client approach
+    // This avoids the cookies dependency that causes build issues
+    const client = createClient(config.url, config.anonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+
+    console.log("✅ Real Supabase server client initialized")
+    return client
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase server client:", error)
+    return connectionManager.getMockClient()
   }
 }
 
-let serverInstance: SupabaseClient | null = null
+// Create a separate function for cookie-based server client when needed
+export async function getSupabaseServerWithCookies() {
+  const connectionManager = ConnectionManager.getInstance()
 
-export function getSupabaseFromServer(): SupabaseClient {
-  if (!serverInstance) {
-    serverInstance = createMockSupabaseClient()
-    console.log("🔄 Using mock Supabase server client")
+  if (!connectionManager.isConfigured()) {
+    console.log("🔄 Using mock Supabase server client - environment not configured")
+    return connectionManager.getMockClient()
   }
-  return serverInstance
+
+  try {
+    const config = connectionManager.getConfig()
+
+    // Dynamically import cookies only when needed
+    const { cookies } = await import("next/headers")
+    const cookieStore = cookies()
+
+    const client = createServerClient(config.url, config.anonKey, {
+      cookies: {
+        get(name: string) {
+          try {
+            return cookieStore.get(name)?.value
+          } catch (error) {
+            console.warn("Could not get cookie:", name, error)
+            return undefined
+          }
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options })
+          } catch (error) {
+            console.warn("Could not set cookie:", name, error)
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: "", ...options })
+          } catch (error) {
+            console.warn("Could not remove cookie:", name, error)
+          }
+        },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+
+    console.log("✅ Real Supabase server client with cookies initialized")
+    return client
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase server client with cookies:", error)
+    return connectionManager.getMockClient()
+  }
 }
 
 export function getSupabaseAdmin(): SupabaseClient {
-  console.log("🔄 Using mock Supabase admin client")
-  return createMockSupabaseClient()
+  const connectionManager = ConnectionManager.getInstance()
+
+  if (!connectionManager.isAdminConfigured()) {
+    console.log("🔄 Using mock Supabase admin client - service role not configured")
+    return connectionManager.getMockClient()
+  }
+
+  try {
+    const config = connectionManager.getConfig()
+
+    // Create admin client with service role key (bypasses RLS)
+    const adminClient = createClient(config.url, config.serviceRoleKey!, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+
+    console.log("✅ Real Supabase admin client initialized with service role")
+    return adminClient
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase admin client:", error)
+    return connectionManager.getMockClient()
+  }
 }
 
-export async function getSupabaseServerWithCookies(): Promise<SupabaseClient> {
-  console.log("🔄 Using mock Supabase server client with cookies")
-  return createMockSupabaseClient()
-}
-
-// Named export for createClient (required by other parts of the codebase)
-export const createClient = getSupabaseFromServer
-
-// Default export
-export default getSupabaseFromServer
+// Export createClient for compatibility
+export { createClient } from "@supabase/supabase-js"
