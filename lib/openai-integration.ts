@@ -6,6 +6,7 @@ export interface CustomQuestion {
   required: boolean
   category: string
   placeholder?: string
+  roleContext?: string
 }
 
 export interface QuestionGenerationRequest {
@@ -127,6 +128,14 @@ function buildQuestionGenerationPrompt(request: QuestionGenerationRequest): stri
       Focus on specific requirements, custom workflows, integration needs, and unique business processes.
       Consider: business context, specific requirements, integration needs, success metrics, constraints.
     `,
+    "mental-peace-coach": `
+      Focus on understanding your stress levels, meditation experience, stress triggers, relaxation preferences, and available time for mindfulness practice.
+      Consider: stress level, meditation experience, stress triggers, relaxation preferences, daily routine.
+    `,
+    "fitness-trainer": `
+      Focus on understanding your current fitness level, workout preferences, available time, and equipment access.
+      Consider: fitness level, workout preferences, available time, equipment access.
+    `,
   }
 
   const templatePrompt =
@@ -146,8 +155,9 @@ Return a JSON array of question objects with this exact structure:
     "type": "text|textarea|select|multiselect",
     "options": ["option1", "option2"] (only for select/multiselect),
     "required": true|false,
-    "category": "strategy|configuration|integration|metrics",
-    "placeholder": "helpful placeholder text"
+    "category": "strategy|configuration|integration|metrics|personal|goals",
+    "placeholder": "helpful placeholder text",
+    "roleContext": "additional context for the question"
   }
 ]
 
@@ -163,6 +173,8 @@ Example categories:
 - configuration: Specific settings and parameters
 - integration: Tool and system connections
 - metrics: Success measurement and KPIs
+- personal: Information about the user
+- goals: User's objectives and preferences
 `
 }
 
@@ -192,6 +204,7 @@ function validateQuestions(questions: any[]): CustomQuestion[] {
       required: Boolean(q.required),
       category: q.category || "configuration",
       placeholder: q.placeholder || "",
+      roleContext: q.roleContext || "",
     }
   })
 }
@@ -200,78 +213,201 @@ function validateQuestions(questions: any[]): CustomQuestion[] {
  * Get fallback questions if OpenAI generation fails
  */
 export function getFallbackQuestions(templateSlug: string): CustomQuestion[] {
-  const fallbackQuestions: Record<string, CustomQuestion[]> = {
+  const fallbackQuestions: Record<string, any[]> = {
+    "mental-peace-coach": [
+      {
+        id: "stress_level",
+        question: "On a scale of 1-10, how would you rate your current stress level?",
+        type: "select",
+        options: ["1 - Very Low", "2", "3", "4", "5 - Moderate", "6", "7", "8", "9", "10 - Very High"],
+        required: true,
+        category: "personal",
+        placeholder: "Select your stress level",
+        roleContext: "As your mindfulness coach, understanding your stress helps me tailor relaxation techniques.",
+      },
+      {
+        id: "meditation_experience",
+        question: "What's your experience with meditation or mindfulness practices?",
+        type: "select",
+        options: ["Complete beginner", "Some experience", "Regular practitioner", "Advanced practitioner"],
+        required: true,
+        category: "personal",
+        roleContext: "This helps me choose the right meditation techniques for your level.",
+      },
+      {
+        id: "stress_triggers",
+        question: "What are your main sources of stress or anxiety?",
+        type: "textarea",
+        required: true,
+        category: "personal",
+        placeholder: "Work pressure, relationships, health concerns, etc.",
+        roleContext: "Understanding your triggers helps me provide targeted stress-relief strategies.",
+      },
+      {
+        id: "relaxation_preferences",
+        question: "Which relaxation activities appeal to you most?",
+        type: "multiselect",
+        options: [
+          "Guided meditation",
+          "Breathing exercises",
+          "Progressive muscle relaxation",
+          "Mindful walking",
+          "Journaling",
+          "Nature sounds",
+        ],
+        required: false,
+        category: "goals",
+        roleContext: "I'll focus on techniques that resonate with your preferences.",
+      },
+      {
+        id: "daily_routine",
+        question: "How much time can you realistically dedicate to mindfulness practice daily?",
+        type: "select",
+        options: ["5-10 minutes", "10-20 minutes", "20-30 minutes", "30+ minutes", "It varies"],
+        required: true,
+        category: "configuration",
+        roleContext: "This helps me create a sustainable practice schedule for you.",
+      },
+    ],
+
+    "fitness-trainer": [
+      {
+        id: "fitness_level",
+        question: "How would you describe your current fitness level?",
+        type: "select",
+        options: ["Beginner", "Intermediate", "Advanced", "Returning after break"],
+        required: true,
+        category: "personal",
+        roleContext: "This helps me design workouts that challenge you appropriately without risking injury.",
+      },
+      {
+        id: "workout_preferences",
+        question: "What types of workouts do you enjoy or want to try?",
+        type: "multiselect",
+        options: ["Strength training", "Cardio", "Yoga", "HIIT", "Pilates", "Outdoor activities", "Sports"],
+        required: true,
+        category: "goals",
+        roleContext: "I'll focus on activities you enjoy to keep you motivated and consistent.",
+      },
+      {
+        id: "available_time",
+        question: "How many days per week can you realistically commit to working out?",
+        type: "select",
+        options: ["2-3 days", "3-4 days", "4-5 days", "5-6 days", "Daily"],
+        required: true,
+        category: "configuration",
+        roleContext: "This helps me create a realistic schedule that fits your lifestyle.",
+      },
+      {
+        id: "equipment_access",
+        question: "What equipment do you have access to?",
+        type: "multiselect",
+        options: ["Full gym", "Home gym", "Basic equipment (dumbbells, bands)", "Bodyweight only", "Outdoor space"],
+        required: true,
+        category: "configuration",
+        roleContext: "I'll design workouts using only the equipment you have available.",
+      },
+    ],
+
     "sales-lead-generator": [
       {
         id: "target_market",
-        question: "What is your primary target market or ideal customer profile?",
+        question: "Who is your ideal customer or target market?",
         type: "textarea",
         required: true,
         category: "strategy",
-        placeholder: "e.g., B2B SaaS companies with 50-200 employees in North America",
+        placeholder: "Industry, company size, job titles, demographics, etc.",
+        roleContext: "Understanding your ideal customer helps me identify the best prospects for you.",
       },
       {
-        id: "lead_sources",
-        question: "Which lead sources should the agent prioritize?",
-        type: "multiselect",
-        options: ["LinkedIn", "Email campaigns", "Cold calling", "Referrals", "Content marketing", "Trade shows"],
-        required: true,
-        category: "configuration",
-      },
-      {
-        id: "qualification_criteria",
-        question: "What criteria should be used to qualify leads?",
-        type: "textarea",
-        required: true,
-        category: "strategy",
-        placeholder: "e.g., Budget > $10k, Decision maker identified, Timeline < 6 months",
-      },
-    ],
-    "marketing-content-manager": [
-      {
-        id: "brand_voice",
-        question: "How would you describe your brand voice and tone?",
-        type: "select",
-        options: ["Professional", "Casual", "Friendly", "Authoritative", "Playful", "Technical"],
-        required: true,
-        category: "strategy",
-      },
-      {
-        id: "content_types",
-        question: "What types of content should the agent create?",
+        id: "current_challenges",
+        question: "What are your biggest challenges in lead generation right now?",
         type: "multiselect",
         options: [
-          "Blog posts",
-          "Social media posts",
-          "Email newsletters",
-          "Video scripts",
-          "Infographics",
-          "Case studies",
+          "Finding qualified prospects",
+          "Getting responses to outreach",
+          "Managing follow-ups",
+          "Tracking lead quality",
+          "Converting leads to meetings",
+          "Time management",
         ],
         required: true,
+        category: "strategy",
+        roleContext: "I'll focus on solving your specific lead generation pain points.",
+      },
+      {
+        id: "tools_available",
+        question: "What sales tools and platforms do you currently use?",
+        type: "multiselect",
+        options: [
+          "LinkedIn Sales Navigator",
+          "CRM (Salesforce, HubSpot, etc.)",
+          "Email automation",
+          "Cold calling",
+          "Social media",
+          "None",
+        ],
+        required: true,
+        category: "integration",
+        roleContext: "I'll integrate with your existing tools to streamline your workflow.",
+      },
+      {
+        id: "success_metrics",
+        question: "How do you measure lead generation success?",
+        type: "multiselect",
+        options: [
+          "Number of qualified leads",
+          "Response rates",
+          "Meeting bookings",
+          "Pipeline value",
+          "Conversion rates",
+        ],
+        required: true,
+        category: "metrics",
+        roleContext: "I'll track and optimize for the metrics that matter most to your business.",
+      },
+    ],
+
+    // Add more template-specific fallback questions...
+    default: [
+      {
+        id: "primary_challenge",
+        question: "What's your biggest challenge in this area right now?",
+        type: "textarea",
+        required: true,
+        category: "strategy",
+        placeholder: "Describe your main challenge or pain point",
+        roleContext: "Understanding your challenges helps me provide targeted solutions.",
+      },
+      {
+        id: "success_definition",
+        question: "What would success look like for you?",
+        type: "textarea",
+        required: true,
+        category: "goals",
+        placeholder: "Describe your ideal outcome",
+        roleContext: "This helps me align my assistance with your vision of success.",
+      },
+      {
+        id: "available_resources",
+        question: "What resources do you have available?",
+        type: "textarea",
+        required: false,
         category: "configuration",
+        placeholder: "Time, tools, budget, team members, etc.",
+        roleContext: "I'll work within your available resources to maximize results.",
+      },
+      {
+        id: "timeline",
+        question: "What's your timeline for achieving this goal?",
+        type: "select",
+        options: ["1-2 weeks", "1 month", "2-3 months", "6 months", "1 year", "Ongoing"],
+        required: true,
+        category: "strategy",
+        roleContext: "This helps me prioritize actions and set realistic milestones.",
       },
     ],
   }
 
-  return (
-    fallbackQuestions[templateSlug] || [
-      {
-        id: "primary_objective",
-        question: "What is the primary objective you want this agent to achieve?",
-        type: "textarea",
-        required: true,
-        category: "strategy",
-        placeholder: "Describe the main goal and expected outcomes",
-      },
-      {
-        id: "success_metrics",
-        question: "How will you measure the success of this agent?",
-        type: "textarea",
-        required: false,
-        category: "metrics",
-        placeholder: "e.g., Number of leads generated, response time, customer satisfaction",
-      },
-    ]
-  )
+  return fallbackQuestions[templateSlug] || fallbackQuestions.default
 }

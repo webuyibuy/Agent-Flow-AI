@@ -2,15 +2,15 @@ import { UserLLMProvider } from "@/lib/user-llm-provider"
 
 /**
  * Centralized AI operations that use user-configured LLM providers
- * This replaces all direct OpenAI API calls throughout the project
+ * Enhanced with role adoption and personalized interactions
  */
 export class AIOperations {
   /**
-   * Generate agent configuration questions
+   * Generate agent configuration questions with role adoption
    */
   static async generateAgentQuestions(
     agentType: string,
-    agentGoal: string,
+    roleSpecificPrompt: string,
     templateSlug: string,
     userId: string,
   ): Promise<{
@@ -29,45 +29,49 @@ export class AIOperations {
       }
     }
 
-    const prompt = `
-Generate 4-6 strategic configuration questions for a ${agentType} agent with the goal: "${agentGoal}"
+    const systemPrompt = `You are a professional ${agentType} who truly cares about helping users succeed. You're having a consultation to understand their specific needs.
 
-Return a JSON array of question objects with this exact structure:
-[
-  {
-    "id": "unique_id",
-    "question": "Strategic question text",
-    "type": "text|textarea|select|multiselect",
-    "options": ["option1", "option2"] (only for select/multiselect),
-    "required": true|false,
-    "category": "strategy|configuration|integration|metrics",
-    "placeholder": "helpful placeholder text"
-  }
-]
+Your personality traits:
+- Genuinely interested in their success
+- Ask follow-up questions that show expertise
+- Use language appropriate to your role
+- Focus on actionable information gathering
+- Be warm but professional
 
-Make questions strategic, actionable, and specific to the agent type and goal.
-`
-
-    const systemPrompt = `You are an expert AI agent configuration assistant. Generate relevant, strategic questions to help users configure their AI agents effectively. Return only valid JSON array of question objects.`
+Generate 5-6 personalized questions that help you understand exactly how to help them. Return only valid JSON array of question objects.`
 
     try {
-      const questions = await UserLLMProvider.generateJSON(prompt, userId, {
+      const questions = await UserLLMProvider.generateJSON(roleSpecificPrompt, userId, {
         systemPrompt,
-        temperature: 0.7,
-        maxTokens: 1500,
+        temperature: 0.8, // Higher temperature for more creative, personalized questions
+        maxTokens: 2000,
       })
 
       if (!questions || !Array.isArray(questions)) {
         throw new Error("Invalid response format")
       }
 
+      // Validate and enhance questions
+      const validatedQuestions = questions
+        .filter((q: any) => q.question && q.type)
+        .map((q: any, index: number) => ({
+          id: q.id || `question_${index + 1}`,
+          question: q.question,
+          type: q.type || "text",
+          options: q.options || [],
+          required: q.required !== false, // Default to true
+          category: q.category || "configuration",
+          placeholder: q.placeholder || "",
+          roleContext: q.roleContext || `This helps me understand your needs better.`,
+        }))
+
       return {
         success: true,
-        questions,
+        questions: validatedQuestions,
         usedFallback: false,
       }
     } catch (error) {
-      console.error("Error generating questions:", error)
+      console.error("Error generating role-specific questions:", error)
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to generate questions",
@@ -77,13 +81,14 @@ Make questions strategic, actionable, and specific to the agent type and goal.
   }
 
   /**
-   * Analyze user input and generate tasks
+   * Analyze user input and generate tasks with role context
    */
   static async analyzeAndGenerateTasks(
     userInput: string,
     agentGoal: string,
     agentType: string,
     userId: string,
+    roleContext?: string,
     existingTasks?: any[],
   ): Promise<{
     success: boolean
@@ -91,6 +96,7 @@ Make questions strategic, actionable, and specific to the agent type and goal.
     dependencies?: any[]
     userNeedAnalysis?: string
     recommendedFlow?: string[]
+    roleInsights?: string
     error?: string
   }> {
     const hasProviders = await UserLLMProvider.hasConfiguredProviders(userId)
@@ -107,29 +113,33 @@ Make questions strategic, actionable, and specific to the agent type and goal.
       : ""
 
     const prompt = `
-Analyze the following user input and create a comprehensive task breakdown for their ${agentType} agent:
+As a professional ${agentType}, analyze this user input and create a comprehensive action plan:
 
 User Input: "${userInput}"
 Agent Goal: "${agentGoal}"
-Agent Type: "${agentType}"${existingTasksContext}
+Agent Type: "${agentType}"
+Role Context: "${roleContext || "Standard professional consultation"}"${existingTasksContext}
 
-Please provide a JSON response with this exact structure:
+Provide a JSON response with this structure:
 {
-  "userNeedAnalysis": "Detailed analysis of what the user is trying to achieve",
-  "recommendedFlow": ["Step 1", "Step 2", "Step 3"],
+  "userNeedAnalysis": "Professional analysis of what the user needs from your expertise as a ${agentType}",
+  "roleInsights": "Specific insights you have as a ${agentType} that will help them succeed",
+  "recommendedFlow": ["Step 1 from your professional perspective", "Step 2", "Step 3"],
   "tasks": [
     {
-      "title": "Task title",
-      "description": "Detailed description",
+      "title": "Task title that reflects your ${agentType} expertise",
+      "description": "Detailed description with your professional insights",
       "priority": "low|medium|high|urgent",
       "status": "todo|blocked",
       "isDependency": true/false,
-      "blockedReason": "Why this task is blocked (if applicable)",
-      "dependsOnTaskId": "reference to another task (if applicable)",
+      "blockedReason": "Professional reason why this needs attention first",
+      "dependsOnTaskId": "reference to prerequisite task",
       "estimatedHours": 2,
       "category": "strategy|research|implementation|review|communication",
+      "roleSpecificNotes": "Your professional notes as a ${agentType}",
       "metadata": {
         "aiGenerated": true,
+        "roleContext": "${agentType}",
         "userInput": "original user input",
         "complexity": "low|medium|high"
       }
@@ -137,29 +147,29 @@ Please provide a JSON response with this exact structure:
   ],
   "dependencies": [
     {
-      "title": "Dependency task title",
-      "description": "What needs human approval or external input",
+      "title": "Dependency that requires your ${agentType} expertise",
+      "description": "What needs professional guidance or approval",
       "priority": "high|urgent",
       "status": "blocked",
       "isDependency": true,
-      "blockedReason": "Requires human approval/input",
+      "blockedReason": "Requires ${agentType} professional input",
       "category": "review|communication",
       "metadata": {
-        "requiresHumanApproval": true,
-        "dependencyType": "approval|input|decision"
+        "requiresExpertApproval": true,
+        "dependencyType": "professional_guidance|approval|decision"
       }
     }
   ]
 }
 `
 
-    const systemPrompt = `You are an expert AI task management assistant. Analyze user needs and create comprehensive task breakdowns with proper dependencies. Always return valid JSON.`
+    const systemPrompt = `You are a professional ${agentType} with deep expertise in your field. Analyze user needs from your professional perspective and create actionable plans that leverage your specific knowledge and experience. Always return valid JSON.`
 
     try {
       const analysis = await UserLLMProvider.generateJSON(prompt, userId, {
         systemPrompt,
         temperature: 0.7,
-        maxTokens: 3000,
+        maxTokens: 3500,
       })
 
       if (!analysis) {
@@ -172,9 +182,10 @@ Please provide a JSON response with this exact structure:
         dependencies: analysis.dependencies || [],
         userNeedAnalysis: analysis.userNeedAnalysis || "Analysis not available",
         recommendedFlow: Array.isArray(analysis.recommendedFlow) ? analysis.recommendedFlow : [],
+        roleInsights: analysis.roleInsights || "Professional insights not available",
       }
     } catch (error) {
-      console.error("Error analyzing tasks:", error)
+      console.error("Error analyzing tasks with role context:", error)
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to analyze tasks",
@@ -183,7 +194,7 @@ Please provide a JSON response with this exact structure:
   }
 
   /**
-   * Generate conversational AI response
+   * Generate conversational AI response with role adoption
    */
   static async generateConversationResponse(
     userMessage: string,
@@ -193,30 +204,37 @@ Please provide a JSON response with this exact structure:
       userRole?: string
       userIndustry?: string
       userGoals?: string[]
+      agentRole?: string // New field for agent role
+      templateSlug?: string // New field for template context
     },
     userId: string,
   ): Promise<string | null> {
     const hasProviders = await UserLLMProvider.hasConfiguredProviders(userId)
 
     if (!hasProviders) {
-      // Return a helpful fallback message
-      return "I'd love to help you, but I need you to configure an AI provider first. Please go to Settings → Profile → API Keys to add your preferred AI service."
+      // Return a helpful fallback message with role context
+      const roleContext = context.agentRole ? ` as your ${context.agentRole}` : ""
+      return `I'd love to help you${roleContext}, but I need you to configure an AI provider first. Please go to Settings → Profile → API Keys to add your preferred AI service.`
     }
 
-    const systemPrompt = `You are a General Agent assistant helping ${context.userName}${
-      context.userRole ? ` (${context.userRole})` : ""
-    }${context.userIndustry ? ` in ${context.userIndustry}` : ""}.
+    const rolePersonality = context.agentRole
+      ? `You are ${context.userName}'s ${context.agentRole}. Embody this role completely - use appropriate language, expertise, and personality traits that match this profession.`
+      : `You are a helpful assistant for ${context.userName}.`
 
-Your role is to:
-1. Help users define and achieve their goals
-2. Break down complex objectives into actionable tasks
-3. Suggest practical strategies and solutions
-4. Be encouraging and supportive
-5. Ask clarifying questions when needed
+    const systemPrompt = `${rolePersonality}${context.userRole ? ` They work as a ${context.userRole}` : ""}${
+      context.userIndustry ? ` in ${context.userIndustry}` : ""
+    }.
+
+Your role-specific responsibilities:
+1. Provide expert advice from your professional perspective
+2. Use terminology and insights appropriate to your role
+3. Show genuine interest in their success
+4. Ask follow-up questions that demonstrate your expertise
+5. Be encouraging and supportive while maintaining professionalism
 
 User's goals: ${context.userGoals?.length ? context.userGoals.join(", ") : "Not specified yet"}
 
-Keep responses conversational, helpful, and focused on actionable advice. When appropriate, suggest specific tasks that could be created to help achieve their goals.`
+Stay in character as their ${context.agentRole || "assistant"} and provide responses that reflect your professional expertise and caring nature.`
 
     const messages = [
       { role: "system" as const, content: systemPrompt },
@@ -229,13 +247,14 @@ Keep responses conversational, helpful, and focused on actionable advice. When a
 
     try {
       const result = await UserLLMProvider.sendMessage(messages, userId, {
-        maxTokens: 500,
-        temperature: 0.7,
+        maxTokens: 600,
+        temperature: 0.8, // Higher temperature for more personality
       })
 
       if ("error" in result) {
         console.error("Conversation generation error:", result.error)
-        return "I'm having trouble connecting to the AI service right now. Please try again in a moment."
+        const roleContext = context.agentRole ? ` as your ${context.agentRole}` : ""
+        return `I'm having trouble connecting to the AI service right now${roleContext}. Please try again in a moment.`
       }
 
       return result.content || null
