@@ -396,106 +396,51 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
     console.log(`👤 [DEBUG] Original User ID: ${originalUserId}`)
 
-    // CRITICAL FIX: Always use the default user ID directly
-    // This bypasses any user ID validation or conversion that might be causing issues
-    const validUserId = DEFAULT_USER_ID
-    console.log(`✅ [DEBUG] Using hardcoded default user ID: ${validUserId}`)
+    // CRITICAL FIX: Use direct SQL to create the agent
+    // This bypasses any ORM issues that might be causing the foreign key constraint error
 
-    // Step 1: Directly create the default profile if it doesn't exist
-    try {
-      console.log(`👤 [DEBUG] Ensuring default profile exists via direct SQL...`)
-
-      // Use direct SQL query to ensure the profile exists
-      const { error: sqlError } = await supabase.rpc("create_default_profile_if_not_exists")
-
-      if (sqlError) {
-        console.error(`⚠️ [DEBUG] SQL function error:`, sqlError)
-
-        // Fallback to direct insert if the function fails
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .insert({
-            id: DEFAULT_USER_ID,
-            display_name: DEFAULT_USER_DISPLAY_NAME,
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-
-        if (insertError && insertError.code !== "23505") {
-          // Ignore duplicate key errors
-          console.error(`⚠️ [DEBUG] Direct insert error:`, insertError)
-        }
-      }
-    } catch (profileError) {
-      console.error(`⚠️ [DEBUG] Profile creation error:`, profileError)
-      // Continue anyway - the profile might already exist
-    }
-
-    // Step 2: Create agent with bulletproof foreign key handling
+    // Step 1: Prepare agent data
     const agentName = agentData.name || `My ${agentData.templateName || "Agent"}`
     const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName || "AI"} assistant`
+    const templateSlug = agentData.templateSlug || "custom"
+    const timestamp = new Date().toISOString()
 
-    console.log(`🤖 [DEBUG] Creating agent with owner_id=${validUserId}`)
+    // Step 2: Use direct SQL to create the agent
+    // This ensures we're using the exact format expected by the database
+    const { data: result, error: sqlError } = await supabase.rpc("create_agent_with_profile", {
+      p_name: agentName,
+      p_goal: agentGoal,
+      p_behavior: agentBehavior,
+      p_template_slug: templateSlug,
+      p_status: "active",
+      p_created_at: timestamp,
+      p_updated_at: timestamp,
+    })
 
-    // First, call our SQL function to ensure the profile exists
-    const { error: profileEnsureError } = await supabase.rpc("create_default_profile_if_not_exists")
-    if (profileEnsureError) {
-      console.warn(`⚠️ [DEBUG] Profile function warning:`, profileEnsureError)
-    }
-
-    // Now create the agent with the guaranteed-to-exist profile
-    const { data: agent, error: agentError } = await supabase
-      .from("agents")
-      .insert({
-        name: agentName,
-        goal: agentGoal,
-        behavior: agentBehavior,
-        owner_id: validUserId, // This will now work because profile is guaranteed to exist
-        template_slug: agentData.templateSlug || "custom",
-        status: "active",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select("id, name")
-      .single()
-
-    if (agentError) {
-      console.error(`❌ [DEBUG] Error creating agent:`, agentError)
-
-      // If we STILL get a foreign key error, there's a deeper issue
-      if (agentError.message?.includes("foreign key constraint")) {
-        // Last resort: Check what profiles actually exist
-        const { data: existingProfiles } = await supabase.from("profiles").select("id, display_name").limit(5)
-
-        console.error(`❌ [DEBUG] Existing profiles:`, existingProfiles)
-
-        return {
-          success: false,
-          error: "Database configuration error. Please contact support.",
-        }
-      }
-
+    if (sqlError) {
+      console.error(`❌ [DEBUG] SQL error creating agent:`, sqlError)
       return {
         success: false,
-        error: `Failed to create agent: ${agentError.message}`,
+        error: `Database error: ${sqlError.message}`,
       }
     }
 
-    if (!agent) {
-      console.error(`❌ [DEBUG] No agent returned from insert`)
+    if (!result || !result.agent_id) {
+      console.error(`❌ [DEBUG] No agent ID returned from SQL function`)
       return {
         success: false,
-        error: "Agent creation failed - no data returned.",
+        error: "Failed to create agent - no ID returned",
       }
     }
 
-    console.log(`✅ [DEBUG] Agent created successfully: ${agent.name} (${agent.id})`)
+    const agentId = result.agent_id
+    console.log(`✅ [DEBUG] Agent created successfully with ID: ${agentId}`)
 
     // Step 3: Store conversation data
     try {
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
-        agent_id: agent.id,
+        agent_id: agentId,
         custom_data: {
           ...agentData,
           created_via: "real_openai_conversation",
@@ -525,10 +470,10 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       console.log(`🚀 [DEBUG] Starting agent orchestration...`)
 
       await AgentOrchestrator.startAgent({
-        agentId: agent.id,
-        agentName: agent.name,
+        agentId: agentId,
+        agentName: agentName,
         agentGoal: agentGoal,
-        userId: validUserId,
+        userId: DEFAULT_USER_ID,
       })
 
       console.log(`✅ [DEBUG] Agent orchestration started successfully`)
@@ -540,15 +485,15 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     // Step 5: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
-    revalidatePath(`/dashboard/agents/${agent.id}`)
+    revalidatePath(`/dashboard/agents/${agentId}`)
     revalidatePath("/dashboard/dependencies")
 
     console.log(`🎉 [DEBUG] Agent setup completed successfully!`)
 
     return {
       success: true,
-      redirectUrl: `/dashboard/agents/${agent.id}`,
-      agentId: agent.id,
+      redirectUrl: `/dashboard/agents/${agentId}`,
+      agentId: agentId,
     }
   } catch (error) {
     console.error(`💥 [DEBUG] Unexpected error in completeAgentSetup:`, error)
