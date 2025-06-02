@@ -36,7 +36,7 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
 
     console.log(`[ChatActions] Processing request for ${templateName}, isInitial: ${isInitial}`)
 
-    // Generate initial greeting
+    // Generate initial greeting using AI
     if (isInitial) {
       console.log(`[ChatActions] Generating initial greeting for ${templateName}`)
 
@@ -54,18 +54,22 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       }
 
       try {
-        const initialPrompt = `You are a friendly ${templateName} assistant helping a user set up their agent.
+        const roleContext = getRoleContext(templateName)
+        const initialPrompt = `You are a professional ${templateName} consultant helping a user set up their AI agent.
 
-Start with a warm, brief greeting (1-2 sentences) introducing yourself as their ${templateName}.
-Then ask ONE simple question about what they want to accomplish with this agent.
+${roleContext}
 
-Keep your response very concise and conversational. Just one question at a time.
-Make sure your greeting reflects your role as a ${templateName}.`
+Start with a warm, professional greeting that shows your expertise in this field.
+Then ask ONE specific, insightful question that demonstrates your knowledge and helps you understand their needs.
+
+Keep your response conversational but professional. Show genuine interest in helping them succeed.
+Make it clear you're here to help them configure an agent that will truly serve their goals.`
 
         const response = await LLMService.generateText(initialPrompt, {
-          systemPrompt: `You are a helpful ${templateName} assistant. Be friendly, concise, and professional.`,
+          systemPrompt: `You are an expert ${templateName} consultant. Be professional, knowledgeable, and genuinely helpful. Ask strategic questions that show your expertise.`,
           userId,
-          temperature: 0.7,
+          temperature: 0.8,
+          maxTokens: 200,
         })
 
         if ("error" in response) {
@@ -77,7 +81,7 @@ Make sure your greeting reflects your role as a ${templateName}.`
           }
         }
 
-        console.log(`[ChatActions] Generated greeting using LLM`)
+        console.log(`[ChatActions] Generated intelligent greeting using LLM`)
         return {
           success: true,
           message: response.content,
@@ -93,69 +97,86 @@ Make sure your greeting reflects your role as a ${templateName}.`
       }
     }
 
-    // Handle ongoing conversation
+    // Handle ongoing conversation with AI
     if (userMessage && messageHistory.length > 0) {
       console.log(`[ChatActions] Processing user message: ${userMessage.substring(0, 50)}...`)
 
-      // Determine what information we still need
-      const neededInfo = determineNeededInfo(messageHistory, currentAgentData)
-      console.log(`[ChatActions] Needed info: ${neededInfo.join(", ")}`)
+      // Check if user has API keys for AI conversation
+      const availableProviders = await LLMService.getAvailableProviders(userId)
 
-      // Check if we have all required information
-      const setupComplete = isSetupComplete(currentAgentData, neededInfo)
-      console.log(`[ChatActions] Setup complete: ${setupComplete}`)
+      if (availableProviders.length > 0) {
+        try {
+          // Use AI for intelligent conversation
+          const conversationHistory = messageHistory.map((msg) => ({
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+          }))
 
-      // Extract information from the user's message
-      const extractedData = extractInfoFromMessage(
-        userMessage,
-        messageHistory[messageHistory.length - 2]?.content || "",
-        currentAgentData,
-      )
+          const roleContext = getRoleContext(templateName)
+          const systemPrompt = `You are a professional ${templateName} consultant helping configure an AI agent.
 
-      const updatedAgentData = { ...currentAgentData, ...extractedData }
-      console.log(`[ChatActions] Updated agent data:`, updatedAgentData)
+${roleContext}
 
-      // Generate next response
-      let nextMessage = ""
-      if (setupComplete) {
-        nextMessage = "Perfect! I have all the information I need. Ready to create your agent?"
-      } else {
-        // Check if user has API keys for AI response
-        const availableProviders = await LLMService.getAvailableProviders(userId)
+Your goal is to gather the following information through natural conversation:
+- Agent name (what they want to call it)
+- Primary goal/purpose (what they want it to accomplish)
+- Specific behavior preferences (how it should operate)
+- Any special requirements or constraints
 
-        if (availableProviders.length > 0) {
-          try {
-            // Try to generate AI response
-            const nextPrompt = createNextPrompt(templateName, userMessage, neededInfo, setupComplete, updatedAgentData)
+Current information gathered:
+${
+  Object.entries(currentAgentData)
+    .filter(([key, value]) => value && key !== "templateSlug" && key !== "templateName")
+    .map(([key, value]) => `- ${key}: ${value}`)
+    .join("\n") || "None yet"
+}
 
-            const response = await LLMService.generateText(nextPrompt, {
-              systemPrompt: `You are a helpful ${templateName} assistant. Ask one brief, conversational question to gather the needed information.`,
+Guidelines:
+1. Ask ONE thoughtful question at a time
+2. Show expertise in your field
+3. Build on their previous answers
+4. Be encouraging and supportive
+5. When you have enough information (name, goal, behavior), let them know you're ready to create their agent
+
+Respond as the expert consultant, not as an AI describing what to do.`
+
+          const response = await LLMService.generateConversation(
+            [{ role: "system", content: systemPrompt }, ...conversationHistory, { role: "user", content: userMessage }],
+            {
               userId,
-              temperature: 0.7,
-              maxTokens: 150,
-            })
+              temperature: 0.8,
+              maxTokens: 250,
+            },
+          )
 
-            if ("error" in response) {
-              console.log(`[ChatActions] AI response failed, using fallback: ${response.error}`)
-              nextMessage = getNextQuestion(neededInfo[0], templateName)
-            } else {
-              nextMessage = response.content
-            }
-          } catch (error) {
-            console.error("[ChatActions] Error generating AI response:", error)
-            nextMessage = getNextQuestion(neededInfo[0], templateName)
+          if ("error" in response) {
+            console.log(`[ChatActions] AI conversation failed: ${response.error}`)
+            // Fall back to simple extraction and response
+            return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
           }
-        } else {
-          // Use fallback question
-          nextMessage = getNextQuestion(neededInfo[0], templateName)
-        }
-      }
 
-      return {
-        success: true,
-        message: nextMessage,
-        agentData: updatedAgentData,
-        setupComplete,
+          // Extract information from the conversation using AI
+          const extractedData = await extractInfoWithAI(userMessage, messageHistory, currentAgentData, userId)
+          const updatedAgentData = { ...currentAgentData, ...extractedData }
+
+          // Check if setup is complete
+          const setupComplete = isSetupComplete(updatedAgentData, [])
+
+          console.log(`[ChatActions] AI conversation successful, setupComplete: ${setupComplete}`)
+
+          return {
+            success: true,
+            message: response.content,
+            agentData: updatedAgentData,
+            setupComplete,
+          }
+        } catch (error) {
+          console.error("[ChatActions] Error in AI conversation:", error)
+          return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
+        }
+      } else {
+        // No API keys available, use fallback
+        return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
       }
     }
 
@@ -385,4 +406,146 @@ function getDefaultGreeting(templateName: string): string {
     greetings[templateName] ||
     `Hi! I'm your ${templateName} assistant. What would you like to accomplish with this agent?`
   )
+}
+
+function getRoleContext(templateName: string): string {
+  const roleContexts: Record<string, string> = {
+    "Mental Peace & Mindfulness Coach": `As a mindfulness and mental wellness expert, you understand stress management, meditation techniques, and creating sustainable peace practices. You know how to assess stress levels, recommend appropriate techniques, and create personalized mindfulness programs.`,
+
+    "Personal Fitness Trainer": `As a certified fitness professional, you understand exercise science, nutrition basics, and how to create safe, effective workout programs. You know how to assess fitness levels, set realistic goals, and design programs that fit different lifestyles and equipment availability.`,
+
+    "Sales Lead Generator": `As a sales and lead generation expert, you understand prospecting strategies, CRM systems, outreach techniques, and conversion optimization. You know how to identify ideal customers, craft compelling messages, and build efficient sales processes.`,
+
+    "Customer Support Agent": `As a customer service expert, you understand support workflows, escalation procedures, knowledge management, and customer satisfaction metrics. You know how to design support processes that resolve issues quickly while maintaining high satisfaction.`,
+
+    "Productivity Optimizer": `As a productivity and efficiency expert, you understand workflow optimization, time management, automation tools, and performance metrics. You know how to identify bottlenecks, streamline processes, and implement systems that boost productivity.`,
+
+    "Research Analyst": `As a research and analysis expert, you understand research methodologies, data sources, analysis frameworks, and reporting standards. You know how to design research projects, gather reliable data, and present actionable insights.`,
+  }
+
+  return (
+    roleContexts[templateName] ||
+    `As an expert in your field, you understand the challenges and opportunities in this domain. You know how to assess needs, recommend solutions, and create effective strategies.`
+  )
+}
+
+async function extractInfoWithAI(
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  currentData: Record<string, any>,
+  userId: string,
+): Promise<Record<string, any>> {
+  try {
+    const extractionPrompt = `Analyze this conversation and extract any new information about the agent being configured.
+
+Previous conversation context:
+${messageHistory
+  .slice(-4)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+
+Latest user message: "${userMessage}"
+
+Current agent data:
+${JSON.stringify(currentData, null, 2)}
+
+Extract and return ONLY new information in this JSON format:
+{
+  "name": "agent name if mentioned",
+  "goal": "primary goal or purpose if mentioned", 
+  "behavior": "behavior preferences if mentioned",
+  "requirements": "special requirements if mentioned"
+}
+
+Only include fields where new information was provided. Return empty object {} if no new information.`
+
+    const result = await LLMService.generateJSON({
+      prompt: extractionPrompt,
+      systemPrompt:
+        "You are a data extraction assistant. Extract only new, relevant information about the agent configuration. Return valid JSON.",
+      userId,
+    })
+
+    if (result.success && result.data) {
+      console.log("[ExtractInfo] AI extraction successful:", result.data)
+      return result.data
+    }
+  } catch (error) {
+    console.error("[ExtractInfo] AI extraction failed:", error)
+  }
+
+  // Fallback to simple extraction
+  return simpleExtractInfo(userMessage, messageHistory[messageHistory.length - 2]?.content || "", currentData)
+}
+
+function handleFallbackConversation(
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  currentAgentData: Record<string, any>,
+  templateName: string,
+): ChatResponse {
+  // Determine what information we still need
+  const neededInfo = determineNeededInfo(messageHistory, currentAgentData)
+
+  // Extract information from the user's message
+  const extractedData = simpleExtractInfo(
+    userMessage,
+    messageHistory[messageHistory.length - 2]?.content || "",
+    currentAgentData,
+  )
+
+  const updatedAgentData = { ...currentAgentData, ...extractedData }
+
+  // Check if setup is complete
+  const setupComplete = isSetupComplete(updatedAgentData, neededInfo)
+
+  // Generate next message
+  const nextMessage = setupComplete
+    ? "Perfect! I have all the information I need. Ready to create your agent?"
+    : getNextQuestion(neededInfo[0], templateName)
+
+  return {
+    success: true,
+    message: nextMessage,
+    agentData: updatedAgentData,
+    setupComplete,
+  }
+}
+
+function simpleExtractInfo(
+  userMessage: string,
+  previousQuestion: string,
+  currentData: Record<string, any>,
+): Record<string, any> {
+  const result: Record<string, any> = {}
+  const lowerMessage = userMessage.toLowerCase()
+  const lowerPrevious = previousQuestion.toLowerCase()
+
+  // Extract goal
+  if (
+    !currentData.goal &&
+    (lowerPrevious.includes("goal") || lowerPrevious.includes("accomplish") || lowerPrevious.includes("achieve"))
+  ) {
+    result.goal = userMessage
+  }
+
+  // Extract name
+  if (!currentData.name && (lowerPrevious.includes("name") || lowerPrevious.includes("call"))) {
+    result.name = userMessage
+  }
+
+  // Extract behavior
+  if (
+    !currentData.behavior &&
+    (lowerPrevious.includes("behave") || lowerPrevious.includes("operate") || lowerPrevious.includes("work"))
+  ) {
+    result.behavior = userMessage
+  }
+
+  // If this is the first message and no specific field is being asked for, assume it's the goal
+  if (!currentData.goal && Object.keys(result).length === 0) {
+    result.goal = userMessage
+  }
+
+  return result
 }

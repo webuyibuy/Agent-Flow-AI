@@ -26,16 +26,14 @@ export async function generateCustomChatResponse(request: CustomChatRequest): Pr
 
     console.log(`[CustomChatActions] Processing custom agent request, isInitial: ${isInitial}`)
 
-    // Generate initial greeting for custom agent
+    // Generate initial greeting for custom agent using AI
     if (isInitial) {
       console.log(`[CustomChatActions] Generating initial greeting for custom agent`)
 
-      // Check if user has any valid API keys
       const availableProviders = await LLMService.getAvailableProviders(userId)
       console.log(`[CustomChatActions] Available providers: ${availableProviders.join(", ")}`)
 
       if (availableProviders.length === 0) {
-        console.log(`[CustomChatActions] No API keys available, using fallback greeting`)
         return {
           success: true,
           message: getCustomAgentGreeting(),
@@ -44,22 +42,23 @@ export async function generateCustomChatResponse(request: CustomChatRequest): Pr
       }
 
       try {
-        const initialPrompt = `You are an AI assistant helping a user create a completely custom AI agent from scratch.
+        const initialPrompt = `You are an AI agent creation specialist helping someone build a completely custom AI agent from scratch.
 
-Start with a warm, enthusiastic greeting about creating a custom agent.
-Then ask ONE specific question about what kind of tasks or problems they want their custom agent to solve.
+You're excited about the possibilities of custom AI and understand that every business has unique needs that templates can't always address.
 
-Keep your response conversational and encouraging. Show excitement about building something unique.
-Ask about their specific use case, industry, or problem they want to solve.`
+Start with an enthusiastic, warm greeting about creating something truly unique.
+Then ask ONE specific, thoughtful question about their business challenge or use case.
+
+Show genuine curiosity about what they want to build. Make them feel like they're embarking on an exciting journey to create something special.`
 
         const response = await LLMService.generateText(initialPrompt, {
-          systemPrompt: `You are a helpful AI agent creation assistant. Be enthusiastic about custom agent creation and ask thoughtful questions to understand the user's unique needs.`,
+          systemPrompt: `You are an enthusiastic AI agent creation expert. Be genuinely excited about custom solutions and ask insightful questions about their unique needs.`,
           userId,
-          temperature: 0.8,
+          temperature: 0.9,
+          maxTokens: 200,
         })
 
         if ("error" in response) {
-          console.log(`[CustomChatActions] LLM error, using fallback greeting: ${response.error}`)
           return {
             success: true,
             message: getCustomAgentGreeting(),
@@ -67,7 +66,6 @@ Ask about their specific use case, industry, or problem they want to solve.`
           }
         }
 
-        console.log(`[CustomChatActions] Generated custom greeting using LLM`)
         return {
           success: true,
           message: response.content,
@@ -83,69 +81,79 @@ Ask about their specific use case, industry, or problem they want to solve.`
       }
     }
 
-    // Handle ongoing conversation for custom agent
+    // Handle ongoing conversation with AI
     if (userMessage && messageHistory.length > 0) {
       console.log(`[CustomChatActions] Processing user message: ${userMessage.substring(0, 50)}...`)
 
-      // Determine what information we still need for custom agent
-      const neededInfo = determineCustomNeededInfo(messageHistory, currentAgentData)
-      console.log(`[CustomChatActions] Needed info: ${neededInfo.join(", ")}`)
+      const availableProviders = await LLMService.getAvailableProviders(userId)
 
-      // Check if we have all required information
-      const setupComplete = isCustomSetupComplete(currentAgentData, neededInfo)
-      console.log(`[CustomChatActions] Setup complete: ${setupComplete}`)
+      if (availableProviders.length > 0) {
+        try {
+          // Use AI for intelligent custom agent conversation
+          const conversationHistory = messageHistory.map((msg) => ({
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+          }))
 
-      // Extract information from the user's message
-      const extractedData = extractCustomInfoFromMessage(
-        userMessage,
-        messageHistory[messageHistory.length - 2]?.content || "",
-        currentAgentData,
-      )
+          const systemPrompt = `You are an AI agent creation specialist helping someone build a custom AI agent.
 
-      const updatedAgentData = { ...currentAgentData, ...extractedData }
-      console.log(`[CustomChatActions] Updated agent data:`, updatedAgentData)
+Your goal is to understand their unique requirements through natural conversation:
+- What specific problem or challenge they want to solve
+- What industry or domain they work in
+- What they want to name their agent
+- What personality or style they prefer
+- Any specific tools or integrations they need
 
-      // Generate next response
-      let nextMessage = ""
-      if (setupComplete) {
-        nextMessage = "Excellent! I have all the details I need to create your custom agent. Ready to bring it to life?"
-      } else {
-        // Check if user has API keys for AI response
-        const availableProviders = await LLMService.getAvailableProviders(userId)
+Current information gathered:
+${
+  Object.entries(currentAgentData)
+    .filter(([key, value]) => value && key !== "isCustom")
+    .map(([key, value]) => `- ${key}: ${value}`)
+    .join("\n") || "None yet"
+}
 
-        if (availableProviders.length > 0) {
-          try {
-            // Try to generate AI response
-            const nextPrompt = createCustomNextPrompt(userMessage, neededInfo, setupComplete, updatedAgentData)
+Guidelines:
+1. Ask ONE thoughtful question at a time
+2. Show genuine interest in their unique use case
+3. Be encouraging about the possibilities
+4. Build on their previous answers naturally
+5. When you have enough information (purpose, industry, name), let them know you're ready to create their custom agent
 
-            const response = await LLMService.generateText(nextPrompt, {
-              systemPrompt: `You are helping create a custom AI agent. Ask thoughtful, specific questions to understand the user's unique requirements. Be encouraging and show genuine interest in their custom use case.`,
+Be enthusiastic about custom solutions and make them feel like they're creating something special.`
+
+          const response = await LLMService.generateConversation(
+            [{ role: "system", content: systemPrompt }, ...conversationHistory, { role: "user", content: userMessage }],
+            {
               userId,
-              temperature: 0.8,
-              maxTokens: 200,
-            })
+              temperature: 0.9,
+              maxTokens: 250,
+            },
+          )
 
-            if ("error" in response) {
-              console.log(`[CustomChatActions] AI response failed, using fallback: ${response.error}`)
-              nextMessage = getCustomNextQuestion(neededInfo[0])
-            } else {
-              nextMessage = response.content
-            }
-          } catch (error) {
-            console.error("[CustomChatActions] Error generating AI response:", error)
-            nextMessage = getCustomNextQuestion(neededInfo[0])
+          if ("error" in response) {
+            console.log(`[CustomChatActions] AI conversation failed: ${response.error}`)
+            return handleCustomFallbackConversation(userMessage, messageHistory, currentAgentData)
           }
-        } else {
-          // Use fallback question
-          nextMessage = getCustomNextQuestion(neededInfo[0])
-        }
-      }
 
-      return {
-        success: true,
-        message: nextMessage,
-        agentData: updatedAgentData,
-        setupComplete,
+          // Extract information using AI
+          const extractedData = await extractCustomInfoWithAI(userMessage, messageHistory, currentAgentData, userId)
+          const updatedAgentData = { ...currentAgentData, ...extractedData }
+
+          // Check if setup is complete
+          const setupComplete = isCustomSetupComplete(updatedAgentData, [])
+
+          return {
+            success: true,
+            message: response.content,
+            agentData: updatedAgentData,
+            setupComplete,
+          }
+        } catch (error) {
+          console.error("[CustomChatActions] Error in AI conversation:", error)
+          return handleCustomFallbackConversation(userMessage, messageHistory, currentAgentData)
+        }
+      } else {
+        return handleCustomFallbackConversation(userMessage, messageHistory, currentAgentData)
       }
     }
 
@@ -499,5 +507,86 @@ Focus on setup, configuration, and initial implementation tasks specific to this
     }
   } catch (error) {
     console.error("Error creating custom initial tasks:", error)
+  }
+}
+
+async function extractCustomInfoWithAI(
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  currentData: Record<string, any>,
+  userId: string,
+): Promise<Record<string, any>> {
+  try {
+    const extractionPrompt = `Analyze this conversation about creating a custom AI agent and extract any new information.
+
+Previous conversation:
+${messageHistory
+  .slice(-4)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+
+Latest user message: "${userMessage}"
+
+Current agent data:
+${JSON.stringify(currentData, null, 2)}
+
+Extract and return ONLY new information in this JSON format:
+{
+  "purpose": "what they want the agent to do/solve",
+  "industry": "their industry or domain",
+  "name": "what they want to name the agent",
+  "personality": "communication style preferences",
+  "tools": "specific tools or integrations mentioned"
+}
+
+Only include fields where new information was provided. Return empty object {} if no new information.`
+
+    const result = await LLMService.generateJSON({
+      prompt: extractionPrompt,
+      systemPrompt:
+        "You are a data extraction assistant for custom AI agent creation. Extract only new, relevant information. Return valid JSON.",
+      userId,
+    })
+
+    if (result.success && result.data) {
+      console.log("[ExtractCustomInfo] AI extraction successful:", result.data)
+      return result.data
+    }
+  } catch (error) {
+    console.error("[ExtractCustomInfo] AI extraction failed:", error)
+  }
+
+  // Fallback to simple extraction
+  return extractCustomInfoFromMessage(
+    userMessage,
+    messageHistory[messageHistory.length - 2]?.content || "",
+    currentData,
+  )
+}
+
+function handleCustomFallbackConversation(
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  currentAgentData: Record<string, any>,
+): CustomChatResponse {
+  const neededInfo = determineCustomNeededInfo(messageHistory, currentAgentData)
+  const extractedData = extractCustomInfoFromMessage(
+    userMessage,
+    messageHistory[messageHistory.length - 2]?.content || "",
+    currentAgentData,
+  )
+
+  const updatedAgentData = { ...currentAgentData, ...extractedData }
+  const setupComplete = isCustomSetupComplete(updatedAgentData, neededInfo)
+
+  const nextMessage = setupComplete
+    ? "Excellent! I have all the details I need to create your custom agent. Ready to bring it to life?"
+    : getCustomNextQuestion(neededInfo[0])
+
+  return {
+    success: true,
+    message: nextMessage,
+    agentData: updatedAgentData,
+    setupComplete,
   }
 }
