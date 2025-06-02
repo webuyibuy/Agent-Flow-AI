@@ -111,27 +111,25 @@ export default function DashboardLayoutClient({
         </nav>
 
         <div className="mt-auto p-4 space-y-3 flex flex-col items-center">
-          {/* Template-based creation button */}
+          {/* Template-based creation button - Green */}
           <Button
-            variant="ghost"
             size="lg"
-            className="w-full text-white hover:bg-white/10 bg-green-600 hover:bg-green-700"
+            className="w-full bg-green-600 hover:bg-green-700 text-white border-0 rounded-lg shadow-sm transition-all duration-200"
             asChild
           >
-            <Link href="/onboarding/templates" className="flex items-center gap-2">
+            <Link href="/onboarding/templates" className="flex items-center gap-3 py-3">
               <LayoutTemplateIcon className="h-5 w-5" />
               Use Template
             </Link>
           </Button>
 
-          {/* Regular agent creation button */}
+          {/* Custom agent creation button - Blue */}
           <Button
-            variant="ghost"
             size="lg"
-            className="w-full text-white hover:bg-white/10 bg-[#0071e3] hover:bg-[#005bbf]"
+            className="w-full bg-[#0071e3] hover:bg-[#005bbf] text-white border-0 rounded-lg shadow-sm transition-all duration-200"
             asChild
           >
-            <Link href="/dashboard/agents/new" className="flex items-center gap-2">
+            <Link href="/dashboard/agents/new" className="flex items-center gap-3 py-3">
               <PlusCircleIcon className="h-5 w-5" />
               New Agent
             </Link>
