@@ -246,9 +246,13 @@ export default function DashboardPage({
       )}
 
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Your AI Workspace</h1>
-        <p className="text-gray-600 mt-2">Manage your agents and complete tasks they need help with</p>
+      <div className="space-y-6 sm:space-y-8">
+        <div className="px-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Your AI Workspace</h1>
+          <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
+            Manage your agents and complete tasks they need help with
+          </p>
+        </div>
       </div>
 
       {/* User Tasks Section */}
@@ -300,9 +304,9 @@ export default function DashboardPage({
               {activeTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="border border-blue-200 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors"
+                  className="border border-blue-200 bg-blue-50 rounded-lg p-3 sm:p-4 hover:bg-blue-100 transition-colors"
                 >
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-3 sm:gap-4">
                     <form action={completeTaskFormAction} className="mt-1">
                       <input type="hidden" name="taskId" value={task.id} />
                       <Checkbox
@@ -393,7 +397,7 @@ export default function DashboardPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((agent) => (
             <Card key={agent.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">

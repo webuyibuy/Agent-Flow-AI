@@ -22,6 +22,7 @@ import RealtimeStatusIndicator from "@/components/realtime-status-indicator"
 import NotificationCenter from "@/components/notification-center"
 import { motion } from "framer-motion"
 import { ProfileUpdater } from "./profile-updater"
+import AdvancedSearch from "@/components/advanced-search"
 
 interface NavItem {
   href: string
@@ -33,7 +34,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: HomeIcon },
   { href: "/dashboard/dependencies", label: "Dependencies", icon: ListChecksIcon },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2Icon },
-  { href: "/dashboard/settings/profile", label: "Settings", icon: SettingsIcon },
+  { href: "/dashboard/dashboard/settings/profile", label: "Settings", icon: SettingsIcon },
 ]
 
 interface DashboardLayoutProps {
@@ -165,9 +166,9 @@ export default function DashboardLayoutClient({
               </SheetHeader>
 
               {/* User Info Section */}
-              <div className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0071e3] text-white text-lg font-medium">
+              <div className="p-6 border-b border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0071e3] text-white text-lg font-medium">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -191,7 +192,7 @@ export default function DashboardLayoutClient({
               <nav className="flex-1 flex flex-col gap-1 p-4 overflow-y-auto">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.label + "-mobile"}>
-                    <Button variant="ghost" className="w-full justify-start h-12 text-base" asChild>
+                    <Button variant="ghost" className="w-full justify-start h-14 text-base touch-manipulation" asChild>
                       <Link href={item.href} prefetch={false} className="flex items-center gap-3">
                         <item.icon className="h-5 w-5" />
                         {item.label}
@@ -216,28 +217,17 @@ export default function DashboardLayoutClient({
                   <RealtimeStatusIndicator />
                 </div>
               </div>
+              {/* Mobile Search */}
+              <div className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+                <AdvancedSearch userId={user.id} className="w-full" />
+              </div>
             </SheetContent>
           </Sheet>
 
           <div className="flex-1 flex items-center justify-between">
             {/* Desktop User Info with XP Badge */}
-            <div className="hidden sm:flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0071e3] text-white font-medium">
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div>
-                    <p className="font-medium text-[#1c1c1e] dark:text-white">{displayName}</p>
-                    {currentBadge && <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2]">{currentBadge.name}</p>}
-                  </div>
-                  {/* XP Badge positioned next to user name */}
-                  <Badge variant="tinted" size="pill" className="flex items-center gap-1 px-3 py-1">
-                    <StarIcon className="h-3 w-3" />
-                    {totalXp} XP
-                  </Badge>
-                </div>
-              </div>
+            <div className="hidden sm:flex items-center gap-4 flex-1 max-w-md">
+              <AdvancedSearch userId={user.id} className="flex-1" />
             </div>
 
             <div className="flex items-center gap-3">
