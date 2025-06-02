@@ -20,6 +20,17 @@ interface ChatResponse {
   agentData?: Record<string, any>
   setupComplete?: boolean
   error?: string
+  suggestedTasks?: Array<{
+    title: string
+    description: string
+    priority: "high" | "medium" | "low"
+    category: string
+  }>
+  workResults?: Array<{
+    type: string
+    title: string
+    content: string
+  }>
 }
 
 export async function generateChatResponse(request: ChatRequest): Promise<ChatResponse> {
@@ -36,147 +47,138 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
 
     console.log(`[ChatActions] Processing request for ${templateName}, isInitial: ${isInitial}`)
 
-    // Generate initial greeting using AI
+    // Generate initial greeting with role-playing
     if (isInitial) {
-      console.log(`[ChatActions] Generating initial greeting for ${templateName}`)
+      console.log(`[ChatActions] Generating initial roleplay greeting for ${templateName}`)
 
-      // Check if user has any valid API keys
       const availableProviders = await LLMService.getAvailableProviders(userId)
-      console.log(`[ChatActions] Available providers: ${availableProviders.join(", ")}`)
 
       if (availableProviders.length === 0) {
-        console.log(`[ChatActions] No API keys available, using fallback greeting`)
         return {
           success: true,
-          message: getDefaultGreeting(templateName),
-          agentData: { templateSlug, templateName },
+          message: getRoleplayGreeting(templateName),
+          agentData: { templateSlug, templateName, isRoleplay: true },
         }
       }
 
       try {
-        const roleContext = getRoleContext(templateName)
-        const initialPrompt = `You are a professional ${templateName} consultant helping a user set up their AI agent.
+        const roleContext = getDetailedRoleContext(templateName)
+        const initialPrompt = `You are now a professional ${templateName}. You're not just helping set up an agent - you ARE the agent, demonstrating your capabilities in real-time.
 
 ${roleContext}
 
-Start with a warm, professional greeting that shows your expertise in this field.
-Then ask ONE specific, insightful question that demonstrates your knowledge and helps you understand their needs.
+Start by introducing yourself as the actual ${templateName}, not as someone helping to set up an agent. Show enthusiasm about working together and briefly mention 2-3 specific things you can help with right now.
 
-Keep your response conversational but professional. Show genuine interest in helping them succeed.
-Make it clear you're here to help them configure an agent that will truly serve their goals.`
+Be conversational, professional, and ready to actually DO the work, not just talk about it.`
 
         const response = await LLMService.generateText(initialPrompt, {
-          systemPrompt: `You are an expert ${templateName} consultant. Be professional, knowledgeable, and genuinely helpful. Ask strategic questions that show your expertise.`,
+          systemPrompt: `You are a professional ${templateName}. Roleplay as the actual expert, ready to work. Be engaging and show your capabilities.`,
           userId,
           temperature: 0.8,
           maxTokens: 200,
         })
 
         if ("error" in response) {
-          console.log(`[ChatActions] LLM error, using fallback greeting: ${response.error}`)
           return {
             success: true,
-            message: getDefaultGreeting(templateName),
-            agentData: { templateSlug, templateName },
+            message: getRoleplayGreeting(templateName),
+            agentData: { templateSlug, templateName, isRoleplay: true },
           }
         }
 
-        console.log(`[ChatActions] Generated intelligent greeting using LLM`)
         return {
           success: true,
           message: response.content,
-          agentData: { templateSlug, templateName },
+          agentData: { templateSlug, templateName, isRoleplay: true },
         }
       } catch (error) {
-        console.error("[ChatActions] Error generating initial greeting:", error)
+        console.error("[ChatActions] Error generating roleplay greeting:", error)
         return {
           success: true,
-          message: getDefaultGreeting(templateName),
-          agentData: { templateSlug, templateName },
+          message: getRoleplayGreeting(templateName),
+          agentData: { templateSlug, templateName, isRoleplay: true },
         }
       }
     }
 
-    // Handle ongoing conversation with AI
+    // Handle ongoing roleplay conversation
     if (userMessage && messageHistory.length > 0) {
-      console.log(`[ChatActions] Processing user message: ${userMessage.substring(0, 50)}...`)
+      console.log(`[ChatActions] Processing roleplay message: ${userMessage.substring(0, 50)}...`)
 
-      // Check if user has API keys for AI conversation
       const availableProviders = await LLMService.getAvailableProviders(userId)
 
       if (availableProviders.length > 0) {
         try {
-          // Use AI for intelligent conversation
+          // Check if user is asking about capabilities
+          const isCapabilityQuery = isAskingAboutCapabilities(userMessage)
+
+          if (isCapabilityQuery) {
+            return await handleCapabilityDemonstration(templateName, userMessage, userId, currentAgentData)
+          }
+
+          // Check if user wants work done
+          const isWorkRequest = isRequestingWork(userMessage)
+
+          if (isWorkRequest) {
+            return await handleWorkRequest(templateName, userMessage, messageHistory, userId, currentAgentData)
+          }
+
+          // Regular conversation as the role
           const conversationHistory = messageHistory.map((msg) => ({
             role: msg.role as "user" | "assistant",
             content: msg.content,
           }))
 
-          const roleContext = getRoleContext(templateName)
-          const systemPrompt = `You are a professional ${templateName} consultant helping configure an AI agent.
+          const roleContext = getDetailedRoleContext(templateName)
+          const systemPrompt = `You are a professional ${templateName}. You're not setting up an agent - you ARE the agent, working in real-time.
 
 ${roleContext}
 
-Your goal is to gather the following information through natural conversation:
-- Agent name (what they want to call it)
-- Primary goal/purpose (what they want it to accomplish)
-- Specific behavior preferences (how it should operate)
-- Any special requirements or constraints
-
-Current information gathered:
-${
-  Object.entries(currentAgentData)
-    .filter(([key, value]) => value && key !== "templateSlug" && key !== "templateName")
-    .map(([key, value]) => `- ${key}: ${value}`)
-    .join("\n") || "None yet"
-}
+Current conversation context:
+${currentAgentData.notes ? `Previous notes: ${currentAgentData.notes}` : ""}
 
 Guidelines:
-1. Ask ONE thoughtful question at a time
-2. Show expertise in your field
-3. Build on their previous answers
-4. Be encouraging and supportive
-5. When you have enough information (name, goal, behavior), let them know you're ready to create their agent
+1. Stay in character as the ${templateName}
+2. Offer to actually DO work, not just discuss it
+3. When appropriate, suggest specific tasks you can work on
+4. Be proactive and show your expertise
+5. Take notes on important information the user shares
 
-Respond as the expert consultant, not as an AI describing what to do.`
+Respond as the professional, ready to work.`
 
           const response = await LLMService.generateConversation(
             [{ role: "system", content: systemPrompt }, ...conversationHistory, { role: "user", content: userMessage }],
             {
               userId,
               temperature: 0.8,
-              maxTokens: 250,
+              maxTokens: 300,
             },
           )
 
           if ("error" in response) {
-            console.log(`[ChatActions] AI conversation failed: ${response.error}`)
-            // Fall back to simple extraction and response
-            return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
+            return handleFallbackRoleplay(userMessage, templateName, currentAgentData)
           }
 
-          // Extract information from the conversation using AI
-          const extractedData = await extractInfoWithAI(userMessage, messageHistory, currentAgentData, userId)
-          const updatedAgentData = { ...currentAgentData, ...extractedData }
-
-          // Check if setup is complete
-          const setupComplete = isSetupComplete(updatedAgentData, [])
-
-          console.log(`[ChatActions] AI conversation successful, setupComplete: ${setupComplete}`)
+          // Extract any notes or important information
+          const updatedNotes = await extractNotesFromConversation(userMessage, messageHistory, userId)
+          const updatedAgentData = {
+            ...currentAgentData,
+            notes: updatedNotes,
+            lastInteraction: new Date().toISOString(),
+          }
 
           return {
             success: true,
             message: response.content,
             agentData: updatedAgentData,
-            setupComplete,
+            setupComplete: false, // Keep conversation going
           }
         } catch (error) {
-          console.error("[ChatActions] Error in AI conversation:", error)
-          return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
+          console.error("[ChatActions] Error in roleplay conversation:", error)
+          return handleFallbackRoleplay(userMessage, templateName, currentAgentData)
         }
       } else {
-        // No API keys available, use fallback
-        return handleFallbackConversation(userMessage, messageHistory, currentAgentData, templateName)
+        return handleFallbackRoleplay(userMessage, templateName, currentAgentData)
       }
     }
 
@@ -193,6 +195,487 @@ Respond as the expert consultant, not as an AI describing what to do.`
   }
 }
 
+async function handleCapabilityDemonstration(
+  templateName: string,
+  userMessage: string,
+  userId: string,
+  currentAgentData: any,
+): Promise<ChatResponse> {
+  try {
+    const roleContext = getDetailedRoleContext(templateName)
+    const capabilityPrompt = `You are a professional ${templateName}. The user is asking about your capabilities.
+
+${roleContext}
+
+Instead of just listing what you can do, demonstrate it! Show specific examples, offer to do actual work right now, and suggest concrete tasks.
+
+For example, if you're a Marketing Content Manager, don't just say "I can create content" - offer to "create a content calendar for next month" or "write a blog post outline about [topic]".
+
+Be specific, actionable, and ready to work immediately.`
+
+    const response = await LLMService.generateText(capabilityPrompt, {
+      systemPrompt: `You are demonstrating your capabilities as a ${templateName}. Show, don't just tell. Offer specific, actionable work.`,
+      userId,
+      temperature: 0.8,
+      maxTokens: 400,
+    })
+
+    if ("error" in response) {
+      return {
+        success: true,
+        message: getFallbackCapabilities(templateName),
+        agentData: currentAgentData,
+        suggestedTasks: getDefaultTasks(templateName),
+      }
+    }
+
+    // Generate suggested tasks based on capabilities
+    const suggestedTasks = await generateCapabilityTasks(templateName, userId)
+
+    return {
+      success: true,
+      message: response.content,
+      agentData: currentAgentData,
+      suggestedTasks,
+    }
+  } catch (error) {
+    console.error("Error in capability demonstration:", error)
+    return {
+      success: true,
+      message: getFallbackCapabilities(templateName),
+      agentData: currentAgentData,
+      suggestedTasks: getDefaultTasks(templateName),
+    }
+  }
+}
+
+async function handleWorkRequest(
+  templateName: string,
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  userId: string,
+  currentAgentData: any,
+): Promise<ChatResponse> {
+  try {
+    const roleContext = getDetailedRoleContext(templateName)
+    const workPrompt = `You are a professional ${templateName} and the user has asked you to do specific work.
+
+${roleContext}
+
+User request: "${userMessage}"
+
+Context from conversation:
+${messageHistory
+  .slice(-4)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+
+Actually DO the work they're asking for. Create real, useful output. Then suggest follow-up tasks that build on this work.
+
+Provide concrete deliverables, not just promises to do work.`
+
+    const response = await LLMService.generateText(workPrompt, {
+      systemPrompt: `You are a ${templateName} actually doing work. Provide real, actionable deliverables. Be thorough and professional.`,
+      userId,
+      temperature: 0.7,
+      maxTokens: 600,
+    })
+
+    if ("error" in response) {
+      return handleFallbackRoleplay(userMessage, templateName, currentAgentData)
+    }
+
+    // Generate work results and follow-up tasks
+    const workResults = await generateWorkResults(templateName, userMessage, response.content, userId)
+    const followUpTasks = await generateFollowUpTasks(templateName, userMessage, userId)
+
+    return {
+      success: true,
+      message: response.content,
+      agentData: {
+        ...currentAgentData,
+        lastWork: userMessage,
+        workCompleted: new Date().toISOString(),
+      },
+      workResults,
+      suggestedTasks: followUpTasks,
+    }
+  } catch (error) {
+    console.error("Error handling work request:", error)
+    return handleFallbackRoleplay(userMessage, templateName, currentAgentData)
+  }
+}
+
+async function generateCapabilityTasks(
+  templateName: string,
+  userId: string,
+): Promise<
+  Array<{
+    title: string
+    description: string
+    priority: "high" | "medium" | "low"
+    category: string
+  }>
+> {
+  try {
+    const taskPrompt = `Generate 3-4 specific, actionable tasks that a ${templateName} could work on right now to demonstrate their capabilities.
+
+Return a JSON array of tasks:
+[
+  {
+    "title": "Specific task title",
+    "description": "Detailed description of what will be delivered",
+    "priority": "high|medium|low",
+    "category": "content|strategy|analysis|planning"
+  }
+]
+
+Make tasks specific and immediately actionable.`
+
+    const result = await LLMService.generateJSON({
+      prompt: taskPrompt,
+      systemPrompt: `Generate specific, actionable tasks for a ${templateName}. Return only valid JSON.`,
+      userId,
+    })
+
+    if (result.success && result.data && Array.isArray(result.data)) {
+      return result.data
+    }
+  } catch (error) {
+    console.error("Error generating capability tasks:", error)
+  }
+
+  return getDefaultTasks(templateName)
+}
+
+async function generateWorkResults(
+  templateName: string,
+  userRequest: string,
+  aiResponse: string,
+  userId: string,
+): Promise<Array<{ type: string; title: string; content: string }>> {
+  try {
+    const resultsPrompt = `Based on the work done by a ${templateName}, extract the key deliverables from their response.
+
+User requested: "${userRequest}"
+AI response: "${aiResponse}"
+
+Return a JSON array of work results:
+[
+  {
+    "type": "document|strategy|analysis|plan",
+    "title": "Deliverable title",
+    "content": "Key content or summary"
+  }
+]
+
+Extract concrete deliverables, not just descriptions.`
+
+    const result = await LLMService.generateJSON({
+      prompt: resultsPrompt,
+      systemPrompt: `Extract concrete work deliverables from the AI response. Return only valid JSON.`,
+      userId,
+    })
+
+    if (result.success && result.data && Array.isArray(result.data)) {
+      return result.data
+    }
+  } catch (error) {
+    console.error("Error generating work results:", error)
+  }
+
+  return [
+    {
+      type: "summary",
+      title: "Work Completed",
+      content: "Task completed successfully. Check the conversation for details.",
+    },
+  ]
+}
+
+async function generateFollowUpTasks(
+  templateName: string,
+  userRequest: string,
+  userId: string,
+): Promise<
+  Array<{
+    title: string
+    description: string
+    priority: "high" | "medium" | "low"
+    category: string
+  }>
+> {
+  try {
+    const followUpPrompt = `Based on the work request "${userRequest}" that a ${templateName} just completed, suggest 2-3 logical follow-up tasks.
+
+Return a JSON array of follow-up tasks:
+[
+  {
+    "title": "Follow-up task title",
+    "description": "What this task will accomplish",
+    "priority": "high|medium|low",
+    "category": "content|strategy|analysis|planning"
+  }
+]
+
+Suggest tasks that build on the completed work.`
+
+    const result = await LLMService.generateJSON({
+      prompt: followUpPrompt,
+      systemPrompt: `Generate logical follow-up tasks for a ${templateName}. Return only valid JSON.`,
+      userId,
+    })
+
+    if (result.success && result.data && Array.isArray(result.data)) {
+      return result.data
+    }
+  } catch (error) {
+    console.error("Error generating follow-up tasks:", error)
+  }
+
+  return getDefaultTasks(templateName).slice(0, 2)
+}
+
+async function extractNotesFromConversation(
+  userMessage: string,
+  messageHistory: Array<{ role: string; content: string }>,
+  userId: string,
+): Promise<string> {
+  try {
+    const notesPrompt = `Extract key information and notes from this conversation that would be important for future reference.
+
+Recent conversation:
+${messageHistory
+  .slice(-3)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+Latest message: "${userMessage}"
+
+Return important information, preferences, goals, or context that should be remembered.`
+
+    const response = await LLMService.generateText(notesPrompt, {
+      systemPrompt: "Extract and summarize key information from the conversation for future reference.",
+      userId,
+      maxTokens: 200,
+    })
+
+    if ("error" in response) {
+      return `User mentioned: ${userMessage}`
+    }
+
+    return response.content
+  } catch (error) {
+    return `User mentioned: ${userMessage}`
+  }
+}
+
+// Helper functions
+function isAskingAboutCapabilities(message: string): boolean {
+  const capabilityKeywords = [
+    "what can you do",
+    "what all you can do",
+    "capabilities",
+    "what are you capable of",
+    "what do you do",
+    "how can you help",
+    "what services",
+    "what can you help with",
+  ]
+
+  const lowerMessage = message.toLowerCase()
+  return capabilityKeywords.some((keyword) => lowerMessage.includes(keyword))
+}
+
+function isRequestingWork(message: string): boolean {
+  const workKeywords = [
+    "create",
+    "write",
+    "develop",
+    "design",
+    "plan",
+    "analyze",
+    "research",
+    "build",
+    "make",
+    "generate",
+    "help me with",
+    "can you",
+    "please",
+  ]
+
+  const lowerMessage = message.toLowerCase()
+  return workKeywords.some((keyword) => lowerMessage.includes(keyword)) && message.length > 10
+}
+
+function getDetailedRoleContext(templateName: string): string {
+  const roleContexts: Record<string, string> = {
+    "Marketing Content Manager": `You are an experienced Marketing Content Manager with expertise in:
+- Content strategy and planning
+- Social media content creation
+- Blog writing and SEO optimization
+- Email marketing campaigns
+- Brand voice and messaging
+- Content calendar management
+- Performance analytics and optimization
+
+You can immediately create content calendars, write blog posts, develop social media strategies, craft email campaigns, and analyze content performance.`,
+
+    "Personal Fitness Trainer": `You are a certified Personal Fitness Trainer with expertise in:
+- Custom workout program design
+- Nutrition planning and guidance
+- Form correction and exercise technique
+- Goal setting and progress tracking
+- Injury prevention and modification
+- Motivation and accountability coaching
+
+You can immediately create workout plans, design nutrition guides, assess fitness levels, and provide personalized training advice.`,
+
+    "Sales Lead Generator": `You are a Sales Lead Generation specialist with expertise in:
+- Lead qualification and scoring
+- Outreach strategy development
+- CRM optimization and management
+- Sales funnel design
+- Prospecting and research
+- Conversion optimization
+
+You can immediately create lead generation strategies, design outreach campaigns, qualify prospects, and optimize sales processes.`,
+
+    "Customer Support Agent": `You are a Customer Support specialist with expertise in:
+- Issue resolution and troubleshooting
+- Knowledge base creation
+- Support workflow optimization
+- Customer satisfaction improvement
+- Escalation procedure design
+- Support metrics and analytics
+
+You can immediately create support documentation, design resolution workflows, analyze support metrics, and improve customer experience.`,
+  }
+
+  return (
+    roleContexts[templateName] ||
+    `You are a professional ${templateName} with deep expertise in your field. You can immediately provide valuable work and insights.`
+  )
+}
+
+function getRoleplayGreeting(templateName: string): string {
+  const greetings: Record<string, string> = {
+    "Marketing Content Manager":
+      "Hi! I'm your Marketing Content Manager, and I'm excited to work with you! I can create content calendars, write blog posts, develop social media strategies, and analyze your content performance. What marketing challenge can I help you tackle today?",
+
+    "Personal Fitness Trainer":
+      "Hey there! I'm your Personal Fitness Trainer, ready to help you achieve your fitness goals! I can create custom workout plans, design nutrition guides, and provide personalized training advice. What fitness goal are you working towards?",
+
+    "Sales Lead Generator":
+      "Hello! I'm your Sales Lead Generation specialist, and I'm here to help you grow your business! I can create lead generation strategies, design outreach campaigns, and optimize your sales funnel. What's your biggest sales challenge right now?",
+
+    "Customer Support Agent":
+      "Hi! I'm your Customer Support specialist, ready to help you deliver amazing customer experiences! I can create support documentation, design resolution workflows, and improve your support processes. What support challenge can I help you solve?",
+  }
+
+  return (
+    greetings[templateName] ||
+    `Hi! I'm your ${templateName}, ready to work with you! What can I help you accomplish today?`
+  )
+}
+
+function getFallbackCapabilities(templateName: string): string {
+  const capabilities: Record<string, string> = {
+    "Marketing Content Manager":
+      "I can help you with content strategy, social media planning, blog writing, email campaigns, and performance analysis. Want me to create a content calendar for next month or write a blog post outline?",
+
+    "Personal Fitness Trainer":
+      "I can create custom workout plans, design nutrition guides, assess your fitness level, and provide training advice. Want me to design a workout routine or create a meal plan?",
+
+    "Sales Lead Generator":
+      "I can develop lead generation strategies, create outreach campaigns, qualify prospects, and optimize your sales process. Want me to create a lead generation plan or design an outreach sequence?",
+
+    "Customer Support Agent":
+      "I can create support documentation, design resolution workflows, analyze support metrics, and improve customer experience. Want me to create a knowledge base article or design a support process?",
+  }
+
+  return (
+    capabilities[templateName] ||
+    `I can help you with various tasks related to ${templateName}. What specific work would you like me to do?`
+  )
+}
+
+function getDefaultTasks(templateName: string): Array<{
+  title: string
+  description: string
+  priority: "high" | "medium" | "low"
+  category: string
+}> {
+  const taskSets: Record<
+    string,
+    Array<{
+      title: string
+      description: string
+      priority: "high" | "medium" | "low"
+      category: string
+    }>
+  > = {
+    "Marketing Content Manager": [
+      {
+        title: "Create 30-day content calendar",
+        description: "Develop a comprehensive content calendar with topics, posting schedule, and content types",
+        priority: "high",
+        category: "planning",
+      },
+      {
+        title: "Write blog post outline",
+        description: "Create a detailed outline for a blog post on a topic of your choice",
+        priority: "medium",
+        category: "content",
+      },
+      {
+        title: "Design social media strategy",
+        description: "Develop a social media strategy with platform-specific content and posting schedule",
+        priority: "high",
+        category: "strategy",
+      },
+    ],
+    "Personal Fitness Trainer": [
+      {
+        title: "Create custom workout plan",
+        description: "Design a personalized workout routine based on your goals and fitness level",
+        priority: "high",
+        category: "planning",
+      },
+      {
+        title: "Develop nutrition guide",
+        description: "Create a nutrition plan with meal suggestions and macro targets",
+        priority: "medium",
+        category: "planning",
+      },
+      {
+        title: "Design progress tracking system",
+        description: "Set up a system to track workouts, measurements, and fitness progress",
+        priority: "medium",
+        category: "planning",
+      },
+    ],
+  }
+
+  return (
+    taskSets[templateName] || [
+      {
+        title: `Initial ${templateName} consultation`,
+        description: "Assess your needs and create a customized action plan",
+        priority: "high",
+        category: "planning",
+      },
+    ]
+  )
+}
+
+function handleFallbackRoleplay(userMessage: string, templateName: string, currentAgentData: any): ChatResponse {
+  return {
+    success: true,
+    message: `As your ${templateName}, I understand you're asking about "${userMessage}". Let me help you with that! What specific work would you like me to focus on?`,
+    agentData: currentAgentData,
+  }
+}
+
 export async function completeAgentSetup(request: { agentData: any; userId: string }): Promise<{
   success: boolean
   redirectUrl?: string
@@ -202,27 +685,18 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const { agentData, userId } = request
     const supabase = getSupabaseAdmin()
 
-    // Validate required fields
-    if (!agentData.name) {
-      agentData.name = `${agentData.templateName} Agent`
-    }
+    // For roleplay agents, we create them differently
+    const agentName = agentData.name || `${agentData.templateName}`
+    const agentGoal = agentData.notes || `Professional ${agentData.templateName} ready to work`
 
-    if (!agentData.goal) {
-      return {
-        success: false,
-        error: "Missing agent goal",
-      }
-    }
+    console.log(`[CompleteAgentSetup] Creating roleplay agent for user ${userId}:`, agentData)
 
-    console.log(`[CompleteAgentSetup] Creating agent for user ${userId}:`, agentData)
-
-    // Create the agent in the database
     const { data: agent, error } = await supabase
       .from("agents")
       .insert({
-        name: agentData.name,
-        goal: agentData.goal,
-        behavior: agentData.behavior || "",
+        name: agentName,
+        goal: agentGoal,
+        behavior: `Professional ${agentData.templateName} with real-time capabilities`,
         owner_id: userId,
         template_slug: agentData.templateSlug,
         template_name: agentData.templateName,
@@ -232,7 +706,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       .select("id")
       .single()
 
-    if (error) {
+    if (error || !agent) {
       console.error("Error creating agent:", error)
       return {
         success: false,
@@ -240,33 +714,16 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       }
     }
 
-    if (!agent) {
-      return {
-        success: false,
-        error: "Failed to create agent",
-      }
-    }
-
-    // Store additional data
-    const { error: customDataError } = await supabase.from("agent_custom_data").insert({
+    // Store roleplay data
+    await supabase.from("agent_custom_data").insert({
       agent_id: agent.id,
       owner_id: userId,
-      custom_data: agentData,
-      configuration_method: "chat_setup",
-      created_at: new Date().toISOString(),
-    })
-
-    if (customDataError) {
-      console.error("Error storing custom data:", customDataError)
-    }
-
-    // Create initial task
-    await supabase.from("tasks").insert({
-      agent_id: agent.id,
-      title: `Initial setup for ${agentData.name}`,
-      description: `Configure and prepare the agent to achieve: ${agentData.goal}`,
-      priority: "high",
-      status: "todo",
+      custom_data: {
+        ...agentData,
+        isRoleplay: true,
+        createdVia: "roleplay_chat",
+      },
+      configuration_method: "roleplay_chat",
       created_at: new Date().toISOString(),
     })
 
@@ -274,11 +731,11 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     await supabase.from("agent_logs").insert({
       agent_id: agent.id,
       log_type: "milestone",
-      message: `🎉 Agent "${agentData.name}" created via chat setup!`,
+      message: `🎭 ${agentData.templateName} "${agentName}" is ready for action!`,
       metadata: {
         template: agentData.templateSlug,
-        created_via: "chat_setup",
-        goal: agentData.goal,
+        created_via: "roleplay_chat",
+        isRoleplay: true,
       },
     })
 
@@ -296,256 +753,4 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       error: "Failed to complete setup",
     }
   }
-}
-
-// Helper functions
-function determineNeededInfo(
-  messageHistory: Array<{ role: string; content: string }>,
-  currentData: Record<string, any>,
-): string[] {
-  const neededInfo = []
-
-  if (!currentData.goal) neededInfo.push("goal")
-  if (!currentData.name) neededInfo.push("name")
-  if (!currentData.behavior && messageHistory.length >= 4) neededInfo.push("behavior")
-
-  return neededInfo
-}
-
-function isSetupComplete(currentData: Record<string, any>, neededInfo: string[]): boolean {
-  return currentData.goal && currentData.name && neededInfo.length <= 1
-}
-
-function extractInfoFromMessage(
-  userMessage: string,
-  previousQuestion: string,
-  currentData: Record<string, any>,
-): Record<string, any> {
-  const result: Record<string, any> = {}
-  const lowerMessage = userMessage.toLowerCase()
-  const lowerPrevious = previousQuestion.toLowerCase()
-
-  // Extract goal
-  if (
-    !currentData.goal &&
-    (lowerPrevious.includes("goal") || lowerPrevious.includes("accomplish") || lowerPrevious.includes("achieve"))
-  ) {
-    result.goal = userMessage
-  }
-
-  // Extract name
-  if (!currentData.name && (lowerPrevious.includes("name") || lowerPrevious.includes("call"))) {
-    result.name = userMessage
-  }
-
-  // Extract behavior
-  if (
-    !currentData.behavior &&
-    (lowerPrevious.includes("behave") || lowerPrevious.includes("operate") || lowerPrevious.includes("work"))
-  ) {
-    result.behavior = userMessage
-  }
-
-  // If this is the first message and no specific field is being asked for, assume it's the goal
-  if (!currentData.goal && Object.keys(result).length === 0) {
-    result.goal = userMessage
-  }
-
-  return result
-}
-
-function createNextPrompt(
-  templateName: string,
-  userMessage: string,
-  neededInfo: string[],
-  setupComplete: boolean,
-  agentData: Record<string, any>,
-): string {
-  if (setupComplete) {
-    return `Thank the user for providing all the information you need. Let them know you're ready to create their ${templateName} agent. Keep your response very brief and friendly.`
-  }
-
-  const nextNeeded = neededInfo[0] || "additional_details"
-
-  const prompts: Record<string, string> = {
-    name: `Ask the user what they would like to name their ${templateName} agent. Keep your question very brief and conversational.`,
-    goal: `Ask the user what their main goal or objective is for this ${templateName} agent. Keep your question very brief and conversational.`,
-    behavior: `Ask the user how they would like their ${templateName} agent to behave or operate. Keep your question very brief and conversational.`,
-    additional_details: `Ask the user if there's anything else they'd like to add about their ${templateName} agent. Keep your question very brief and conversational.`,
-  }
-
-  return prompts[nextNeeded]
-}
-
-function getNextQuestion(neededInfo: string, templateName: string): string {
-  const questions: Record<string, string> = {
-    goal: `What would you like to accomplish with your ${templateName}?`,
-    name: `What would you like to name your ${templateName}?`,
-    behavior: `How would you like your ${templateName} to behave or operate?`,
-  }
-
-  return questions[neededInfo] || `What else would you like to tell me about your ${templateName}?`
-}
-
-function getDefaultGreeting(templateName: string): string {
-  const greetings: Record<string, string> = {
-    "Mental Peace & Mindfulness Coach":
-      "Hi! I'm your mindfulness coach. What would you like to achieve with meditation and inner peace?",
-    "Personal Fitness Trainer": "Hey there! I'm your fitness trainer. What are your fitness goals?",
-    "Sales Lead Generator": "Hello! I'm your sales assistant. What kind of leads are you looking to generate?",
-    "Customer Support Agent":
-      "Hi! I'm here to help with customer support. What kind of support do you want to provide?",
-    "Productivity Optimizer":
-      "Hi! I'm your productivity coach. What areas of your productivity would you like to improve?",
-    "Research Analyst": "Hello! I'm your research assistant. What topics would you like me to help you research?",
-    "Creative Content Creator": "Hi there! I'm your creative assistant. What kind of content would you like to create?",
-    "Personal Financial Advisor": "Hello! I'm your financial advisor. What are your financial goals?",
-  }
-
-  return (
-    greetings[templateName] ||
-    `Hi! I'm your ${templateName} assistant. What would you like to accomplish with this agent?`
-  )
-}
-
-function getRoleContext(templateName: string): string {
-  const roleContexts: Record<string, string> = {
-    "Mental Peace & Mindfulness Coach": `As a mindfulness and mental wellness expert, you understand stress management, meditation techniques, and creating sustainable peace practices. You know how to assess stress levels, recommend appropriate techniques, and create personalized mindfulness programs.`,
-
-    "Personal Fitness Trainer": `As a certified fitness professional, you understand exercise science, nutrition basics, and how to create safe, effective workout programs. You know how to assess fitness levels, set realistic goals, and design programs that fit different lifestyles and equipment availability.`,
-
-    "Sales Lead Generator": `As a sales and lead generation expert, you understand prospecting strategies, CRM systems, outreach techniques, and conversion optimization. You know how to identify ideal customers, craft compelling messages, and build efficient sales processes.`,
-
-    "Customer Support Agent": `As a customer service expert, you understand support workflows, escalation procedures, knowledge management, and customer satisfaction metrics. You know how to design support processes that resolve issues quickly while maintaining high satisfaction.`,
-
-    "Productivity Optimizer": `As a productivity and efficiency expert, you understand workflow optimization, time management, automation tools, and performance metrics. You know how to identify bottlenecks, streamline processes, and implement systems that boost productivity.`,
-
-    "Research Analyst": `As a research and analysis expert, you understand research methodologies, data sources, analysis frameworks, and reporting standards. You know how to design research projects, gather reliable data, and present actionable insights.`,
-  }
-
-  return (
-    roleContexts[templateName] ||
-    `As an expert in your field, you understand the challenges and opportunities in this domain. You know how to assess needs, recommend solutions, and create effective strategies.`
-  )
-}
-
-async function extractInfoWithAI(
-  userMessage: string,
-  messageHistory: Array<{ role: string; content: string }>,
-  currentData: Record<string, any>,
-  userId: string,
-): Promise<Record<string, any>> {
-  try {
-    const extractionPrompt = `Analyze this conversation and extract any new information about the agent being configured.
-
-Previous conversation context:
-${messageHistory
-  .slice(-4)
-  .map((msg) => `${msg.role}: ${msg.content}`)
-  .join("\n")}
-
-Latest user message: "${userMessage}"
-
-Current agent data:
-${JSON.stringify(currentData, null, 2)}
-
-Extract and return ONLY new information in this JSON format:
-{
-  "name": "agent name if mentioned",
-  "goal": "primary goal or purpose if mentioned", 
-  "behavior": "behavior preferences if mentioned",
-  "requirements": "special requirements if mentioned"
-}
-
-Only include fields where new information was provided. Return empty object {} if no new information.`
-
-    const result = await LLMService.generateJSON({
-      prompt: extractionPrompt,
-      systemPrompt:
-        "You are a data extraction assistant. Extract only new, relevant information about the agent configuration. Return valid JSON.",
-      userId,
-    })
-
-    if (result.success && result.data) {
-      console.log("[ExtractInfo] AI extraction successful:", result.data)
-      return result.data
-    }
-  } catch (error) {
-    console.error("[ExtractInfo] AI extraction failed:", error)
-  }
-
-  // Fallback to simple extraction
-  return simpleExtractInfo(userMessage, messageHistory[messageHistory.length - 2]?.content || "", currentData)
-}
-
-function handleFallbackConversation(
-  userMessage: string,
-  messageHistory: Array<{ role: string; content: string }>,
-  currentAgentData: Record<string, any>,
-  templateName: string,
-): ChatResponse {
-  // Determine what information we still need
-  const neededInfo = determineNeededInfo(messageHistory, currentAgentData)
-
-  // Extract information from the user's message
-  const extractedData = simpleExtractInfo(
-    userMessage,
-    messageHistory[messageHistory.length - 2]?.content || "",
-    currentAgentData,
-  )
-
-  const updatedAgentData = { ...currentAgentData, ...extractedData }
-
-  // Check if setup is complete
-  const setupComplete = isSetupComplete(updatedAgentData, neededInfo)
-
-  // Generate next message
-  const nextMessage = setupComplete
-    ? "Perfect! I have all the information I need. Ready to create your agent?"
-    : getNextQuestion(neededInfo[0], templateName)
-
-  return {
-    success: true,
-    message: nextMessage,
-    agentData: updatedAgentData,
-    setupComplete,
-  }
-}
-
-function simpleExtractInfo(
-  userMessage: string,
-  previousQuestion: string,
-  currentData: Record<string, any>,
-): Record<string, any> {
-  const result: Record<string, any> = {}
-  const lowerMessage = userMessage.toLowerCase()
-  const lowerPrevious = previousQuestion.toLowerCase()
-
-  // Extract goal
-  if (
-    !currentData.goal &&
-    (lowerPrevious.includes("goal") || lowerPrevious.includes("accomplish") || lowerPrevious.includes("achieve"))
-  ) {
-    result.goal = userMessage
-  }
-
-  // Extract name
-  if (!currentData.name && (lowerPrevious.includes("name") || lowerPrevious.includes("call"))) {
-    result.name = userMessage
-  }
-
-  // Extract behavior
-  if (
-    !currentData.behavior &&
-    (lowerPrevious.includes("behave") || lowerPrevious.includes("operate") || lowerPrevious.includes("work"))
-  ) {
-    result.behavior = userMessage
-  }
-
-  // If this is the first message and no specific field is being asked for, assume it's the goal
-  if (!currentData.goal && Object.keys(result).length === 0) {
-    result.goal = userMessage
-  }
-
-  return result
 }

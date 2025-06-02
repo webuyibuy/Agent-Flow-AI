@@ -6,14 +6,28 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Loader2, Send, ArrowRight } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Send, ArrowRight, Sparkles, CheckCircle, Plus, Brain } from "lucide-react"
 import { generateChatResponse, completeAgentSetup } from "@/app/onboarding/agent-config/chat-actions"
 import type { AgentTemplate } from "@/lib/agent-templates"
 
 interface Message {
   id: string
   role: "assistant" | "user"
+  content: string
+}
+
+interface SuggestedTask {
+  title: string
+  description: string
+  priority: "high" | "medium" | "low"
+  category: string
+}
+
+interface WorkResult {
+  type: string
+  title: string
   content: string
 }
 
@@ -33,6 +47,8 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     templateSlug,
     templateName,
   })
+  const [suggestedTasks, setSuggestedTasks] = useState<SuggestedTask[]>([])
+  const [workResults, setWorkResults] = useState<WorkResult[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -83,6 +99,11 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
             ...prev,
             ...response.agentData,
           }))
+        }
+
+        // Handle suggested tasks
+        if (response.suggestedTasks) {
+          setSuggestedTasks(response.suggestedTasks)
         }
       }
     } catch (error) {
@@ -161,21 +182,19 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           }))
         }
 
+        // Handle suggested tasks
+        if (response.suggestedTasks) {
+          setSuggestedTasks(response.suggestedTasks)
+        }
+
+        // Handle work results
+        if (response.workResults) {
+          setWorkResults((prev) => [...prev, ...response.workResults])
+        }
+
         // Check if setup is complete
         if (response.setupComplete) {
           setSetupComplete(true)
-
-          // Add completion message
-          setTimeout(() => {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `complete-${Date.now()}`,
-                role: "assistant",
-                content: "Perfect! I have all the information I need. Click 'Create Agent' below to finish setup.",
-              },
-            ])
-          }, 1000)
         }
       }
     } catch (error) {
@@ -235,6 +254,13 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     }
   }
 
+  const addTaskToDependencies = async (task: SuggestedTask) => {
+    // This would integrate with your dependency system
+    console.log("Adding task to dependencies:", task)
+    // Remove from suggested tasks
+    setSuggestedTasks((prev) => prev.filter((t) => t.title !== task.title))
+  }
+
   // Get avatar image based on template
   const getAvatarImage = () => {
     if (template?.icon) {
@@ -245,17 +271,19 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
   const getDefaultGreeting = (templateName: string) => {
     const greetings: Record<string, string> = {
-      "Mental Peace & Mindfulness Coach":
-        "Hi! I'm your mindfulness coach. What would you like to achieve with meditation and inner peace?",
-      "Personal Fitness Trainer": "Hey there! I'm your fitness trainer. What are your fitness goals?",
-      "Sales Lead Generator": "Hello! I'm your sales assistant. What kind of leads are you looking to generate?",
+      "Marketing Content Manager":
+        "Hi! I'm your Marketing Content Manager, ready to work! What marketing challenge can I help you tackle today?",
+      "Personal Fitness Trainer":
+        "Hey there! I'm your Personal Fitness Trainer, ready to help you achieve your goals! What fitness challenge are you working on?",
+      "Sales Lead Generator":
+        "Hello! I'm your Sales Lead Generation specialist, ready to grow your business! What's your biggest sales challenge?",
       "Customer Support Agent":
-        "Hi! I'm here to help with customer support. What kind of support do you want to provide?",
+        "Hi! I'm your Customer Support specialist, ready to deliver amazing experiences! What support challenge can I solve?",
     }
 
     return (
       greetings[templateName] ||
-      `Hi! I'm your ${templateName} assistant. What would you like to accomplish with this agent?`
+      `Hi! I'm your ${templateName}, ready to work with you! What can I help you accomplish today?`
     )
   }
 
@@ -274,78 +302,168 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         </div>
       </div>
 
-      {/* Chat container */}
-      <Card className="flex-1 min-h-[500px] max-h-[600px] flex flex-col">
-        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 pt-6">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === "assistant" ? "justify-start" : "justify-end"}`}>
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                  message.role === "assistant"
-                    ? "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
-                    : "bg-blue-600 text-white"
-                }`}
-              >
-                <p className="text-sm leading-relaxed">{message.content}</p>
-              </div>
-            </div>
-          ))}
-
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800">
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-gray-500 text-sm">Typing...</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Chat container */}
+        <div className="lg:col-span-2">
+          <Card className="min-h-[500px] max-h-[600px] flex flex-col">
+            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 pt-6">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === "assistant" ? "justify-start" : "justify-end"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                      message.role === "assistant"
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        : "bg-blue-600 text-white"
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                  </div>
                 </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800">
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                      <span className="text-gray-500 text-sm">Working on it...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </CardContent>
+
+            {/* Chat input */}
+            <div className="border-t p-4">
+              <div className="flex space-x-2">
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask me anything or request specific work..."
+                  className="flex-1"
+                  disabled={isLoading}
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!input.trim() || isLoading}
+                  size="icon"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </CardContent>
-
-        {/* Chat input */}
-        <div className="border-t p-4">
-          <div className="flex space-x-2">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message and press Enter..."
-              className="flex-1"
-              disabled={isLoading || setupComplete}
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!input.trim() || isLoading || setupComplete}
-              size="icon"
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+          </Card>
         </div>
-      </Card>
 
-      {setupComplete && (
-        <Button
-          onClick={handleCreateAgent}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Agent...
-            </>
-          ) : (
-            <>
-              Create Agent <ArrowRight className="ml-2 h-5 w-5" />
-            </>
+        {/* Sidebar with tasks and results */}
+        <div className="space-y-4">
+          {/* Work Results */}
+          {workResults.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Work Completed
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {workResults.map((result, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
+                  >
+                    <h4 className="font-medium text-green-800 dark:text-green-200">{result.title}</h4>
+                    <p className="text-sm text-green-600 dark:text-green-300 mt-1">{result.content}</p>
+                    <Badge variant="secondary" className="mt-2 text-xs">
+                      {result.type}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
-        </Button>
-      )}
+
+          {/* Suggested Tasks */}
+          {suggestedTasks.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Brain className="h-5 w-5 text-blue-600" />
+                  Suggested Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {suggestedTasks.map((task, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-blue-800 dark:text-blue-200">{task.title}</h4>
+                        <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">{task.description}</p>
+                        <div className="flex gap-2 mt-2">
+                          <Badge
+                            variant={
+                              task.priority === "high"
+                                ? "destructive"
+                                : task.priority === "medium"
+                                  ? "default"
+                                  : "secondary"
+                            }
+                            className="text-xs"
+                          >
+                            {task.priority}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {task.category}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => addTaskToDependencies(task)}
+                        className="ml-2 text-blue-600 hover:text-blue-700"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Create Agent Button */}
+          {messages.length > 2 && (
+            <Button
+              onClick={handleCreateAgent}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Agent...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Create Agent <ArrowRight className="ml-2 h-5 w-5" />
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
