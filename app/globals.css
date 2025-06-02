@@ -2,86 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CSS Custom Properties for Theme System */
+/* Apple-inspired CSS Custom Properties for Clean Design */
 @layer base {
   :root {
-    /* Light theme colors (default) */
-    --background: 255 255 255;
-    --foreground: 28 28 30;
-    --card: 255 255 255;
+    /* Light theme colors - Apple's clean palette */
+    --background: 255 255 255; /* Pure white */
+    --foreground: 28 28 30; /* Apple's dark text */
+    --card: 255 255 255; /* White cards */
     --card-foreground: 28 28 30;
     --popover: 255 255 255;
     --popover-foreground: 28 28 30;
-    --primary: 0 102 204;
+    --primary: 0 122 255; /* Apple blue */
     --primary-foreground: 255 255 255;
-    --secondary: 249 249 249;
+    --secondary: 248 248 248; /* Very light gray */
     --secondary-foreground: 28 28 30;
-    --muted: 242 242 247;
-    --muted-foreground: 142 142 147;
-    --accent: 242 242 247;
+    --muted: 248 248 248; /* Light gray, not yellow */
+    --muted-foreground: 99 99 102; /* Apple's secondary text */
+    --accent: 248 248 248; /* Light gray accent */
     --accent-foreground: 28 28 30;
-    --destructive: 220 53 69;
+    --destructive: 255 59 48; /* Apple red */
     --destructive-foreground: 255 255 255;
-    --border: 229 229 234;
-    --input: 229 229 234;
-    --ring: 0 125 250;
+    --border: 229 229 234; /* Apple's light border */
+    --input: 255 255 255; /* White inputs */
+    --ring: 0 122 255; /* Apple blue focus */
     --radius: 0.75rem;
 
-    /* Success colors */
-    --success: 40 167 69;
+    /* Success colors - Apple green */
+    --success: 52 199 89;
     --success-foreground: 255 255 255;
-    --success-bg: 212 237 218;
-    --success-text: 21 87 36;
+    --success-bg: 240 253 244;
+    --success-text: 22 101 52;
 
-    /* Warning colors */
-    --warning: 255 193 7;
-    --warning-foreground: 28 28 30;
-    --warning-bg: 255 243 205;
-    --warning-text: 133 100 4;
+    /* Warning colors - Apple orange */
+    --warning: 255 149 0;
+    --warning-foreground: 255 255 255;
+    --warning-bg: 255 251 235;
+    --warning-text: 154 52 18;
 
     /* Info colors */
-    --info: 23 162 184;
+    --info: 0 122 255;
     --info-foreground: 255 255 255;
-    --info-bg: 209 236 241;
-    --info-text: 12 84 96;
+    --info-bg: 239 246 255;
+    --info-text: 30 64 175;
   }
 
   .dark {
-    /* Dark theme colors */
-    --background: 28 28 30;
+    /* Dark theme colors - Apple's dark palette */
+    --background: 0 0 0; /* True black */
     --foreground: 255 255 255;
-    --card: 44 44 46;
+    --card: 28 28 30; /* Apple's dark card */
     --card-foreground: 255 255 255;
-    --popover: 44 44 46;
+    --popover: 28 28 30;
     --popover-foreground: 255 255 255;
-    --primary: 0 145 255;
+    --primary: 10 132 255; /* Apple blue for dark */
     --primary-foreground: 255 255 255;
-    --secondary: 58 58 60;
+    --secondary: 28 28 30;
     --secondary-foreground: 255 255 255;
-    --muted: 58 58 60;
+    --muted: 44 44 46; /* Apple's dark muted */
     --muted-foreground: 174 174 178;
-    --accent: 58 58 60;
+    --accent: 44 44 46;
     --accent-foreground: 255 255 255;
     --destructive: 255 69 58;
     --destructive-foreground: 255 255 255;
-    --border: 58 58 60;
-    --input: 58 58 60;
-    --ring: 90 200 250;
+    --border: 58 58 60; /* Apple's dark border */
+    --input: 28 28 30;
+    --ring: 10 132 255;
 
     /* Dark theme semantic colors */
     --success: 48 209 88;
     --success-foreground: 255 255 255;
-    --success-bg: 58 58 60;
+    --success-bg: 28 28 30;
     --success-text: 48 209 88;
 
     --warning: 255 159 10;
-    --warning-foreground: 28 28 30;
-    --warning-bg: 58 58 60;
+    --warning-foreground: 0 0 0;
+    --warning-bg: 28 28 30;
     --warning-text: 255 159 10;
 
     --info: 100 210 255;
-    --info-foreground: 28 28 30;
-    --info-bg: 58 58 60;
+    --info-foreground: 0 0 0;
+    --info-bg: 28 28 30;
     --info-text: 100 210 255;
   }
 }
@@ -94,6 +94,7 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
   }
 
   /* Smooth transitions for theme changes */
@@ -106,160 +107,153 @@
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
 
-  /* Enhanced scrollbar styling */
+  /* Apple-style scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-muted/30;
+    @apply bg-transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
+    @apply bg-gray-300 rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    @apply bg-gray-400;
   }
 
-  /* Focus styles */
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-gray-600;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+
+  /* Apple-style focus */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
   }
 
-  /* Selection styles */
+  /* Apple-style selection */
   ::selection {
-    @apply bg-primary/20 text-primary-foreground;
+    @apply bg-primary/20;
   }
 }
 
 @layer components {
-  /* Light theme optimized components */
-  .card-light {
-    @apply bg-white border border-gray-200 shadow-sm rounded-lg;
+  /* Apple-inspired component styles */
+  .apple-card {
+    @apply bg-white border border-gray-200 rounded-xl shadow-sm;
   }
 
-  .card-elevated {
-    @apply bg-white border border-gray-200 shadow-md rounded-lg;
+  .dark .apple-card {
+    @apply bg-gray-900 border-gray-800;
   }
 
-  .glass-light {
+  .apple-button-primary {
+    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition-colors;
+  }
+
+  .apple-button-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-lg px-4 py-2 transition-colors;
+  }
+
+  .dark .apple-button-secondary {
+    @apply bg-gray-800 hover:bg-gray-700 text-white;
+  }
+
+  .apple-input {
+    @apply bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors;
+  }
+
+  .dark .apple-input {
+    @apply bg-gray-900 border-gray-700 text-white placeholder-gray-400 focus:border-blue-400 focus:ring-blue-400;
+  }
+
+  /* Remove any yellow backgrounds */
+  .no-yellow {
+    background-color: transparent !important;
+  }
+
+  /* Apple-style glass effect */
+  .apple-glass {
     @apply bg-white/80 backdrop-blur-xl border border-gray-200/50;
   }
 
-  .glass-dark {
-    @apply bg-gray-900/80 backdrop-blur-xl border border-gray-700/50;
-  }
-
-  /* Button variants for light theme */
-  .btn-light {
-    @apply bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
-  }
-
-  .btn-primary-light {
-    @apply bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm;
-  }
-
-  /* Text variants */
-  .text-primary-light {
-    @apply text-gray-900;
-  }
-
-  .text-secondary-light {
-    @apply text-gray-600;
-  }
-
-  .text-muted-light {
-    @apply text-gray-500;
-  }
-
-  /* Status indicators */
-  .status-success {
-    @apply bg-green-100 text-green-800 border-green-200;
-  }
-
-  .status-warning {
-    @apply bg-yellow-100 text-yellow-800 border-yellow-200;
-  }
-
-  .status-error {
-    @apply bg-red-100 text-red-800 border-red-200;
-  }
-
-  .status-info {
-    @apply bg-blue-100 text-blue-800 border-blue-200;
-  }
-
-  /* Dark theme status indicators */
-  .dark .status-success {
-    @apply bg-green-900/30 text-green-400 border-green-800;
-  }
-
-  .dark .status-warning {
-    @apply bg-yellow-900/30 text-yellow-400 border-yellow-800;
-  }
-
-  .dark .status-error {
-    @apply bg-red-900/30 text-red-400 border-red-800;
-  }
-
-  .dark .status-info {
-    @apply bg-blue-900/30 text-blue-400 border-blue-800;
+  .dark .apple-glass {
+    @apply bg-gray-900/80 border-gray-700/50;
   }
 }
 
 @layer utilities {
-  /* Theme-aware utilities */
-  .theme-transition {
-    @apply transition-colors duration-300 ease-in-out;
+  /* Apple-inspired utilities */
+  .text-apple-primary {
+    @apply text-gray-900;
   }
 
-  .bg-theme-card {
-    @apply bg-card border border-border;
+  .text-apple-secondary {
+    @apply text-gray-600;
   }
 
-  .bg-theme-elevated {
-    @apply bg-card border border-border shadow-lg;
+  .text-apple-tertiary {
+    @apply text-gray-500;
   }
 
-  .text-theme-primary {
-    @apply text-foreground;
+  .dark .text-apple-primary {
+    @apply text-white;
   }
 
-  .text-theme-secondary {
-    @apply text-muted-foreground;
+  .dark .text-apple-secondary {
+    @apply text-gray-300;
+  }
+
+  .dark .text-apple-tertiary {
+    @apply text-gray-400;
+  }
+
+  .bg-apple-primary {
+    @apply bg-white;
+  }
+
+  .bg-apple-secondary {
+    @apply bg-gray-50;
+  }
+
+  .bg-apple-tertiary {
+    @apply bg-gray-100;
+  }
+
+  .dark .bg-apple-primary {
+    @apply bg-black;
+  }
+
+  .dark .bg-apple-secondary {
+    @apply bg-gray-900;
+  }
+
+  .dark .bg-apple-tertiary {
+    @apply bg-gray-800;
   }
 
   /* Animation utilities */
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out;
+  .animate-apple-fade-in {
+    animation: appleFadeIn 0.3s ease-out;
   }
 
-  .animate-slide-up {
-    animation: slideUp 0.3s ease-out;
-  }
-
-  .animate-scale-in {
-    animation: scaleIn 0.2s ease-out;
+  .animate-apple-slide-up {
+    animation: appleSlideUp 0.4s ease-out;
   }
 }
 
-/* Animations */
-@keyframes fadeIn {
+/* Apple-style animations */
+@keyframes appleFadeIn {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -267,15 +261,43 @@
   }
 }
 
-@keyframes scaleIn {
+@keyframes appleSlideUp {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
   }
+}
+
+/* Remove any yellow backgrounds globally */
+.bg-yellow-50,
+.bg-yellow-100,
+.bg-yellow-200,
+.bg-yellow-300,
+.bg-yellow-400,
+.bg-yellow-500 {
+  @apply bg-white !important;
+}
+
+.dark .bg-yellow-50,
+.dark .bg-yellow-100,
+.dark .bg-yellow-200,
+.dark .bg-yellow-300,
+.dark .bg-yellow-400,
+.dark .bg-yellow-500 {
+  @apply bg-gray-900 !important;
+}
+
+/* Ensure clean backgrounds */
+.dashboard-layout {
+  @apply bg-white;
+}
+
+.dark .dashboard-layout {
+  @apply bg-black;
 }
 
 /* Print styles */
