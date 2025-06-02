@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useActionState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   CheckCircleIcon,
   PlusCircle,
@@ -23,8 +23,9 @@ import { motion } from "framer-motion"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
+import { useActionState } from "@/hooks/useActionState" // Import useActionState hook
 
-export default function DashboardPage({
+export default async function DashboardPage({
   searchParams,
 }: {
   searchParams?: { created?: string }
@@ -34,8 +35,8 @@ export default function DashboardPage({
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error" | "unauthenticated">(
     "checking",
   )
-  const [agents, setAgents] = useState<any[]>([])
-  const [activeTasks, setActiveTasks] = useState<any[]>([])
+  const [agentsData, setAgentsData] = useState<any[]>([])
+  const [tasksData, setTasksData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
 
@@ -113,7 +114,7 @@ export default function DashboardPage({
       const supabase = getSupabaseBrowserClient()
 
       // Fetch agents
-      const { data: agentsData, error: agentsError } = await supabase
+      const { data: agents, error: agentsError } = await supabase
         .from("agents")
         .select("*")
         .eq("owner_id", user.id)
@@ -121,13 +122,13 @@ export default function DashboardPage({
 
       if (agentsError) {
         console.error("Error loading agents:", agentsError.message)
-        setAgents([])
+        setAgentsData([])
       } else {
-        setAgents(agentsData || [])
+        setAgentsData(agents || [])
       }
 
       // Fetch user's active tasks (from dependencies)
-      const { data: tasksData, error: tasksError } = await supabase
+      const { data: tasks, error: tasksError } = await supabase
         .from("tasks")
         .select(`
           *,
@@ -142,17 +143,17 @@ export default function DashboardPage({
 
       if (tasksError) {
         console.error("Error loading active tasks:", tasksError.message)
-        setActiveTasks([])
+        setTasksData([])
       } else {
-        setActiveTasks(tasksData || [])
+        setTasksData(tasks || [])
       }
 
       setConnectionStatus("connected")
     } catch (error: any) {
       console.error("Critical error in loadData:", error.message)
       setConnectionStatus("error")
-      setAgents([])
-      setActiveTasks([])
+      setAgentsData([])
+      setTasksData([])
     } finally {
       setLoading(false)
     }
@@ -167,7 +168,7 @@ export default function DashboardPage({
   // Handle task completion
   useEffect(() => {
     if (completionState?.success && completionState.taskId) {
-      setActiveTasks((prevTasks) => prevTasks.filter((task) => task.id !== completionState.taskId))
+      setTasksData((prevTasks) => prevTasks.filter((task) => task.id !== completionState.taskId))
     }
   }, [completionState])
 
@@ -263,7 +264,7 @@ export default function DashboardPage({
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                 <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <CardTitle className="text-gray-900 dark:text-white">Tasks for You ({activeTasks.length})</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-white">Tasks for You ({tasksData.length})</CardTitle>
             </div>
             <Link
               href="/dashboard/dependencies"
@@ -275,7 +276,7 @@ export default function DashboardPage({
           </div>
         </CardHeader>
         <CardContent className="bg-white dark:bg-gray-900">
-          {activeTasks.length === 0 ? (
+          {tasksData.length === 0 ? (
             <div className="text-center py-12">
               <FileText className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No tasks for you right now</h3>
@@ -301,7 +302,7 @@ export default function DashboardPage({
             </div>
           ) : (
             <div className="space-y-4">
-              {activeTasks.map((task) => (
+              {tasksData.map((task) => (
                 <div
                   key={task.id}
                   className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
@@ -374,7 +375,7 @@ export default function DashboardPage({
 
       {/* Agents Overview */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Agents ({agents.length})</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Agents ({agentsData.length})</h2>
         <Link
           href="/dashboard/agents/new"
           className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
@@ -384,7 +385,7 @@ export default function DashboardPage({
         </Link>
       </div>
 
-      {agents.length === 0 ? (
+      {agentsData.length === 0 ? (
         <Card className="border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
           <CardContent className="py-16 text-center">
             <Zap className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-6" />
@@ -405,7 +406,7 @@ export default function DashboardPage({
         </Card>
       ) : (
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
+          {agentsData.map((agent) => (
             <Card
               key={agent.id}
               className="hover:shadow-md transition-shadow bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"

@@ -1,65 +1,73 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { SignInForm, SignUpForm, ForgotPasswordForm } from "@/components/auth-forms"
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import type React from "react"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { auth } from "@/lib/auth"
 
 export default function LoginPage() {
-  const [formType, setFormType] = useState<"signin" | "signup" | "forgot-password">("signin")
-  const [loadingSession, setLoadingSession] = useState(true)
-  const supabase = getSupabaseBrowserClient()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (session) {
-        // Client-side redirect after session check
-        window.location.href = "/dashboard"
-      } else {
-        setLoadingSession(false)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const { data, error } = await auth.signInWithPassword({ email, password })
+      if (!error) {
+        router.push("/dashboard")
       }
-    }
-
-    checkSession()
-
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        window.location.href = "/dashboard"
-      }
-    })
-
-    return () => {
-      authListener?.unsubscribe()
-    }
-  }, [supabase])
-
-  if (loadingSession) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
-      </div>
-    )
-  }
-
-  const renderForm = () => {
-    switch (formType) {
-      case "signin":
-        return <SignInForm onSwitchForm={setFormType} />
-      case "signup":
-        return <SignUpForm onSwitchForm={setFormType} />
-      case "forgot-password":
-        return <ForgotPasswordForm onSwitchForm={setFormType} />
-      default:
-        return <SignInForm onSwitchForm={setFormType} />
+    } catch (error) {
+      console.error("Login error:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      {renderForm()}
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        <h1 className="text-2xl font-bold text-center mb-8">Sign In</h1>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
