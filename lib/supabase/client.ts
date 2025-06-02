@@ -42,3 +42,6 @@ export function getSupabaseBrowserClient(): SupabaseClient {
 export function resetSupabaseClient() {
   supabaseClient = null
 }
+
+// Named export for createClient
+export const createClient = getSupabaseBrowserClient

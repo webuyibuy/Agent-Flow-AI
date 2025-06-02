@@ -71,3 +71,11 @@ export const checkProductionDeployment = async () => {
     process.exit(1) // Exit with a non-zero code to indicate failure
   }
 }
+
+// Named export for the deployment checker
+export const ProductionDeploymentChecker = {
+  isProduction,
+  validateEnvVars,
+  checkSupabaseConnection,
+  checkProductionDeployment,
+}

@@ -526,3 +526,6 @@ Provide insights in JSON format:
         ]
   }
 }
+
+// Named export for the analytics service
+export const analyticsService = AnalyticsService
