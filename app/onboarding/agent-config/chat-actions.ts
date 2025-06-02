@@ -488,7 +488,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         owner_id: validUserId,
         template_slug: agentData.templateSlug || "custom",
         status: "active",
-        agent_type: agentData.templateName || "Custom Agent",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -497,6 +496,23 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     if (agentError) {
       console.error(`❌ [DEBUG] Error creating agent:`, agentError)
+      console.error(`❌ [DEBUG] Full error details:`, JSON.stringify(agentError, null, 2))
+
+      // Provide more specific error messages
+      if (agentError.message?.includes("column") && agentError.message?.includes("does not exist")) {
+        return {
+          success: false,
+          error: "Database schema error. Please contact support.",
+        }
+      }
+
+      if (agentError.code === "23505") {
+        return {
+          success: false,
+          error: "An agent with this name already exists. Please try a different name.",
+        }
+      }
+
       return {
         success: false,
         error: `Failed to create agent: ${agentError.message}`,
@@ -517,20 +533,19 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     try {
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
-        owner_id: validUserId,
-        agent_name: agentName,
-        agent_goal: agentGoal,
-        agent_behavior: agentBehavior,
-        template_slug: agentData.templateSlug || "custom",
-        configuration_method: "real_ai_chat",
-        data: {
+        custom_data: {
           ...agentData,
           created_via: "real_openai_conversation",
           original_user_id: originalUserId,
+          agent_type: agentData.templateName || "Custom Agent",
           conversation_summary: `Agent configured through AI chat for ${agentData.templateName || "general"} tasks`,
+          template_name: agentData.templateName,
+          focus_area: agentData.focus_area,
+          industry: agentData.industry,
+          key_tasks: agentData.key_tasks || [],
         },
+        configuration_method: "real_ai_chat",
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
 
       if (customDataError) {

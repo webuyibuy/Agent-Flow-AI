@@ -267,6 +267,8 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
   const handleCreateAgent = async () => {
     setIsLoading(true)
+    setError(null) // Clear previous errors
+
     try {
       console.log("🎯 [CLIENT] Creating agent with data:", agentData)
 
@@ -279,8 +281,13 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
       if (result.success && result.redirectUrl) {
         console.log("✅ [CLIENT] Redirecting to:", result.redirectUrl)
-        router.push(result.redirectUrl)
+
+        // Add a small delay to ensure database operations complete
+        setTimeout(() => {
+          router.push(result.redirectUrl)
+        }, 500)
       } else {
+        console.error("❌ [CLIENT] Agent creation failed:", result.error)
         setError(result.error || "Failed to create agent")
       }
     } catch (error) {
