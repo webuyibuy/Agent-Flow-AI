@@ -8,12 +8,59 @@ export interface MockSupabaseClient {
     signOut: () => Promise<{ error: null }>
     onAuthStateChange: (callback: any) => { data: { subscription: { unsubscribe: () => void } } }
   }
-  from: (table: string) => {
-    select: (columns?: string) => Promise<{ data: any[]; error: null }>
-    insert: (data: any) => Promise<{ data: any[]; error: null }>
-    update: (data: any) => Promise<{ data: any[]; error: null }>
-    delete: () => Promise<{ data: any[]; error: null }>
+  from: (table: string) => MockQueryBuilder
+}
+
+interface MockQueryBuilder {
+  select: (columns?: string) => MockQueryBuilder
+  insert: (data: any) => MockQueryBuilder
+  update: (data: any) => MockQueryBuilder
+  delete: () => MockQueryBuilder
+  eq: (column: string, value: any) => MockQueryBuilder
+  neq: (column: string, value: any) => MockQueryBuilder
+  gt: (column: string, value: any) => MockQueryBuilder
+  gte: (column: string, value: any) => MockQueryBuilder
+  lt: (column: string, value: any) => MockQueryBuilder
+  lte: (column: string, value: any) => MockQueryBuilder
+  like: (column: string, pattern: string) => MockQueryBuilder
+  ilike: (column: string, pattern: string) => MockQueryBuilder
+  in: (column: string, values: any[]) => MockQueryBuilder
+  is: (column: string, value: any) => MockQueryBuilder
+  order: (column: string, options?: { ascending?: boolean }) => MockQueryBuilder
+  limit: (count: number) => MockQueryBuilder
+  range: (from: number, to: number) => MockQueryBuilder
+  single: () => Promise<{ data: any | null; error: null }>
+  maybeSingle: () => Promise<{ data: any | null; error: null }>
+  then: (resolve: (value: { data: any[]; error: null }) => void) => void
+}
+
+function createMockQueryBuilder(): MockQueryBuilder {
+  const mockData = [{ id: "1", display_name: "Demo User", email: "user@example.com" }]
+
+  const builder: MockQueryBuilder = {
+    select: () => builder,
+    insert: () => builder,
+    update: () => builder,
+    delete: () => builder,
+    eq: () => builder,
+    neq: () => builder,
+    gt: () => builder,
+    gte: () => builder,
+    lt: () => builder,
+    lte: () => builder,
+    like: () => builder,
+    ilike: () => builder,
+    in: () => builder,
+    is: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    range: () => builder,
+    single: async () => ({ data: mockData[0] || null, error: null }),
+    maybeSingle: async () => ({ data: mockData[0] || null, error: null }),
+    then: (resolve) => resolve({ data: mockData, error: null }),
   }
+
+  return builder
 }
 
 function createMockClient(): MockSupabaseClient {
@@ -26,12 +73,7 @@ function createMockClient(): MockSupabaseClient {
       signOut: async () => ({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
-    from: () => ({
-      select: async () => ({ data: [], error: null }),
-      insert: async () => ({ data: [], error: null }),
-      update: async () => ({ data: [], error: null }),
-      delete: async () => ({ data: [], error: null }),
-    }),
+    from: () => createMockQueryBuilder(),
   }
 }
 
