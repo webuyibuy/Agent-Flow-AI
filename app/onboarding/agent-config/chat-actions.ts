@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDecryptedApiKey } from "@/app/dashboard/settings/profile/api-key-actions"
+import { DEFAULT_USER_DISPLAY_NAME } from "@/lib/default-user"
 
 interface ChatRequest {
   templateSlug: string
@@ -450,6 +451,60 @@ export async function acceptSuggestion(
   }
 }
 
+async function ensureUserProfileExists(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    console.log(`👤 [DEBUG] Ensuring user profile exists for: ${userId}`)
+
+    // First, check if profile already exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .eq("id", userId)
+      .single()
+
+    if (existingProfile) {
+      console.log(`✅ [DEBUG] Profile already exists: ${existingProfile.display_name}`)
+      return { success: true }
+    }
+
+    if (checkError && checkError.code !== "PGRST116") {
+      // PGRST116 = no rows returned
+      console.error(`❌ [DEBUG] Error checking profile:`, checkError)
+      return { success: false, error: `Error checking profile: ${checkError.message}` }
+    }
+
+    // Profile doesn't exist, create it
+    console.log(`🔨 [DEBUG] Creating new profile for user: ${userId}`)
+
+    const { data: newProfile, error: createError } = await supabase
+      .from("profiles")
+      .insert({
+        id: userId,
+        display_name: DEFAULT_USER_DISPLAY_NAME,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id, display_name")
+      .single()
+
+    if (createError) {
+      console.error(`❌ [DEBUG] Error creating profile:`, createError)
+      return { success: false, error: `Error creating profile: ${createError.message}` }
+    }
+
+    console.log(`✅ [DEBUG] Created new profile: ${newProfile.display_name}`)
+    return { success: true }
+  } catch (error) {
+    console.error(`💥 [DEBUG] Unexpected error in ensureUserProfileExists:`, error)
+    return {
+      success: false,
+      error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    }
+  }
+}
+
 export async function completeAgentSetup(request: { agentData: any; userId: string }): Promise<{
   success: boolean
   redirectUrl?: string
@@ -460,18 +515,47 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const supabase = getSupabaseAdmin()
 
     console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
+    console.log(`👤 [DEBUG] User ID: ${userId}`)
 
-    // Validate user
-    const { data: user, error: userError } = await supabase.from("profiles").select("id").eq("id", userId).single()
-
-    if (userError || !user) {
-      return { success: false, error: "User not found." }
+    // Step 1: Ensure user profile exists
+    const profileResult = await ensureUserProfileExists(userId)
+    if (!profileResult.success) {
+      console.error(`❌ [DEBUG] Failed to ensure profile exists:`, profileResult.error)
+      return {
+        success: false,
+        error: `Profile setup failed: ${profileResult.error}`,
+      }
     }
 
-    // Create agent
+    // Step 2: Validate user exists (double-check)
+    const { data: user, error: userError } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .eq("id", userId)
+      .single()
+
+    if (userError || !user) {
+      console.error(`❌ [DEBUG] User validation failed:`, userError)
+      return {
+        success: false,
+        error: "User profile not found after creation attempt.",
+      }
+    }
+
+    console.log(`✅ [DEBUG] User validated: ${user.display_name} (${user.id})`)
+
+    // Step 3: Create agent with validated user
     const agentName = agentData.name || `My ${agentData.templateName}`
     const agentGoal = agentData.goal || `Help with ${agentData.templateName.toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName} assistant`
+
+    console.log(`🤖 [DEBUG] Creating agent:`, {
+      name: agentName,
+      goal: agentGoal,
+      behavior: agentBehavior,
+      owner_id: userId,
+      template_slug: agentData.templateSlug || "custom",
+    })
 
     const { data: agent, error: agentError } = await supabase
       .from("agents")
@@ -483,18 +567,41 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         template_slug: agentData.templateSlug || "custom",
         status: "active",
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
-      .select("id")
+      .select("id, name")
       .single()
 
-    if (agentError || !agent) {
-      console.error("Error creating agent:", agentError)
-      return { success: false, error: "Failed to create agent." }
+    if (agentError) {
+      console.error(`❌ [DEBUG] Error creating agent:`, agentError)
+
+      // Check if it's a foreign key constraint error
+      if (agentError.code === "23503") {
+        return {
+          success: false,
+          error: "User profile validation failed. Please try logging out and back in.",
+        }
+      }
+
+      return {
+        success: false,
+        error: `Failed to create agent: ${agentError.message}`,
+      }
     }
 
-    // Store conversation data
+    if (!agent) {
+      console.error(`❌ [DEBUG] No agent returned from insert`)
+      return {
+        success: false,
+        error: "Agent creation failed - no data returned.",
+      }
+    }
+
+    console.log(`✅ [DEBUG] Agent created successfully: ${agent.name} (${agent.id})`)
+
+    // Step 4: Store conversation data (optional, non-critical)
     try {
-      await supabase.from("agent_custom_data").insert({
+      const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
         owner_id: userId,
         custom_data: {
@@ -506,19 +613,33 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         configuration_method: "real_ai_chat",
         created_at: new Date().toISOString(),
       })
+
+      if (customDataError) {
+        console.warn(`⚠️ [DEBUG] Warning: Could not store conversation data:`, customDataError)
+        // Don't fail the whole operation for this
+      } else {
+        console.log(`✅ [DEBUG] Conversation data stored successfully`)
+      }
     } catch (customDataError) {
-      console.error("Error storing conversation data:", customDataError)
+      console.warn(`⚠️ [DEBUG] Warning: Error storing conversation data:`, customDataError)
+      // Don't fail the whole operation for this
     }
 
+    // Step 5: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
+
+    console.log(`🎉 [DEBUG] Agent setup completed successfully!`)
 
     return {
       success: true,
       redirectUrl: `/dashboard/agents/${agent.id}`,
     }
   } catch (error) {
-    console.error("Error in completeAgentSetup:", error)
-    return { success: false, error: "Failed to create agent." }
+    console.error(`💥 [DEBUG] Unexpected error in completeAgentSetup:`, error)
+    return {
+      success: false,
+      error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    }
   }
 }
