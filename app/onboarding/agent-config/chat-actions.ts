@@ -403,83 +403,36 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const templateSlug = agentData.templateSlug || "custom"
     const timestamp = new Date().toISOString()
 
-    // Step 2: First ensure we have a valid profile to use
-    let profileId = DEFAULT_USER_ID
+    // Step 2: Use the new SQL function to safely create the agent
+    const { data: result, error: sqlError } = await supabase.rpc("create_agent_safely", {
+      p_name: agentName,
+      p_goal: agentGoal,
+      p_behavior: agentBehavior,
+      p_template_slug: templateSlug,
+      p_status: "active",
+    })
 
-    // Try to get or create the default profile
-    const { data: existingProfile, error: profileCheckError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", DEFAULT_USER_ID)
-      .single()
-
-    if (!existingProfile) {
-      console.log(`📝 [DEBUG] Creating default profile...`)
-
-      // Create the default profile
-      const { data: newProfile, error: profileCreateError } = await supabase
-        .from("profiles")
-        .insert({
-          id: DEFAULT_USER_ID,
-          display_name: DEFAULT_USER_DISPLAY_NAME,
-          updated_at: timestamp,
-          created_at: timestamp,
-        })
-        .select("id")
-        .single()
-
-      if (profileCreateError) {
-        console.error(`❌ [DEBUG] Failed to create default profile:`, profileCreateError)
-
-        // Fallback: Try to use the original user's profile if it exists
-        const { data: userProfile } = await supabase.from("profiles").select("id").eq("id", originalUserId).single()
-
-        if (userProfile) {
-          console.log(`✅ [DEBUG] Using original user's profile: ${originalUserId}`)
-          profileId = originalUserId
-        } else {
-          return {
-            success: false,
-            error: `Failed to create or find a valid profile. Profile error: ${profileCreateError.message}`,
-          }
-        }
-      } else {
-        console.log(`✅ [DEBUG] Default profile created successfully`)
-        profileId = DEFAULT_USER_ID
-      }
-    } else {
-      console.log(`✅ [DEBUG] Default profile already exists`)
-      profileId = DEFAULT_USER_ID
-    }
-
-    // Step 3: Create the agent directly with the validated profile ID
-    const agentId = crypto.randomUUID()
-
-    const { data: agent, error: agentError } = await supabase
-      .from("agents")
-      .insert({
-        id: agentId,
-        name: agentName,
-        goal: agentGoal,
-        behavior: agentBehavior,
-        owner_id: profileId,
-        template_slug: templateSlug,
-        status: "active",
-        created_at: timestamp,
-        updated_at: timestamp,
-      })
-      .select("id")
-      .single()
-
-    if (agentError) {
-      console.error(`❌ [DEBUG] Error creating agent:`, agentError)
+    if (sqlError) {
+      console.error(`❌ [DEBUG] SQL error creating agent:`, sqlError)
       return {
         success: false,
-        error: `Failed to create agent: ${agentError.message}`,
+        error: `Database error: ${sqlError.message}`,
       }
     }
 
+    if (!result || result.length === 0) {
+      console.error(`❌ [DEBUG] No result returned from SQL function`)
+      return {
+        success: false,
+        error: "Failed to create agent - no result returned",
+      }
+    }
+
+    const agentId = result[0].agent_id
+    const profileId = result[0].owner_id
+
     console.log(`✅ [DEBUG] Agent created successfully with ID: ${agentId}`)
+    console.log(`✅ [DEBUG] Using profile ID: ${profileId}`)
 
     // Step 4: Store conversation data
     try {
