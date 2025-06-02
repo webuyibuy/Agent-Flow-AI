@@ -19,22 +19,32 @@ export function getSupabaseFromServer() {
     const client = createServerClient(config.url, config.anonKey, {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value
+          try {
+            return cookieStore.get(name)?.value
+          } catch (error) {
+            console.warn("Could not get cookie:", name, error)
+            return undefined
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
-            console.warn("Could not set cookie:", error)
+            console.warn("Could not set cookie:", name, error)
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options })
           } catch (error) {
-            console.warn("Could not remove cookie:", error)
+            console.warn("Could not remove cookie:", name, error)
           }
         },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
       },
     })
 
@@ -62,6 +72,7 @@ export function getSupabaseAdmin(): SupabaseClient {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
+        detectSessionInUrl: false,
       },
     })
 
