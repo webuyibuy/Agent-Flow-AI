@@ -1,8 +1,9 @@
-import './globals.css'
+import type React from "react"
+import "./globals.css"
 
 export const metadata = {
-  title: 'Basic Next.js App',
-  description: 'A basic Next.js application',
+  title: "AgentFlow Platform",
+  description: "AI Agent Management Platform",
     generator: 'v0.dev'
 }
 

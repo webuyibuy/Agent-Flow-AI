@@ -44,6 +44,11 @@
     --info-foreground: 255 255 255;
     --info-bg: 239 246 255;
     --info-text: 30 64 175;
+
+    /* New custom properties */
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 214, 219, 220;
+    --background-end-rgb: 255, 255, 255;
   }
 
   .dark {
@@ -83,18 +88,34 @@
     --info-foreground: 0 0 0;
     --info-bg: 28 28 30;
     --info-text: 100 210 255;
+
+    /* New custom properties for dark theme */
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
+
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
   }
 
   /* Smooth transitions for theme changes */
@@ -141,6 +162,11 @@
   /* Apple-style selection */
   ::selection {
     @apply bg-primary/20;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
   }
 }
 

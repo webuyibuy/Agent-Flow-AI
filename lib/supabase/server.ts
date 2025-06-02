@@ -1,4 +1,8 @@
 // Mock Supabase server implementation (no external dependencies)
+
+const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co"
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key"
+
 export interface MockSupabaseClient {
   auth: {
     getSession: () => Promise<{ data: { session: null }; error: null }>
@@ -77,6 +81,8 @@ function createMockClient(): MockSupabaseClient {
   }
 }
 
+const supabaseServer = createMockClient()
+
 export function getSupabaseFromServer(): MockSupabaseClient {
   console.log("🔄 Using mock Supabase server client")
   return createMockClient()
@@ -87,10 +93,8 @@ export function getSupabaseAdmin(): MockSupabaseClient {
   return createMockClient()
 }
 
-export async function getSupabaseServerWithCookies(): Promise<MockSupabaseClient> {
-  console.log("🔄 Using mock Supabase server client with cookies")
-  return createMockClient()
-}
+// Named export for compatibility
+export const getSupabaseServerWithCookies = () => supabaseServer
 
 // Export createClient for compatibility
-export const createClient = createMockClient
+export const createSupabaseClient = createMockClient

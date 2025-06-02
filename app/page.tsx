@@ -1,17 +1,16 @@
 export default function Home() {
   return (
-    <main>
-      <h1>Clean Next.js App</h1>
-      <p>This is a completely clean Next.js application.</p>
-      <p>No external dependencies, no Supabase, nothing that could cause conflicts.</p>
+    <main style={{ padding: "2rem", fontFamily: "system-ui" }}>
+      <h1>AgentFlow Platform</h1>
+      <p>AI Agent Management Platform</p>
       <div style={{ marginTop: "2rem" }}>
-        <h2>Navigation</h2>
+        <h2>Quick Links</h2>
         <ul>
           <li>
-            <a href="/about">About</a>
+            <a href="/dashboard">Dashboard</a>
           </li>
           <li>
-            <a href="/contact">Contact</a>
+            <a href="/login">Login</a>
           </li>
         </ul>
       </div>

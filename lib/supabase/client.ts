@@ -1,4 +1,16 @@
 // Mock Supabase client implementation (no external dependencies)
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key"
+
+const supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+
+export const supabase = supabaseClient
+
+// Named export for compatibility
+export const SupabaseClient = () => supabase
+
 export interface MockSupabaseClient {
   auth: {
     getSession: () => Promise<{ data: { session: null }; error: null }>
@@ -90,6 +102,3 @@ export function getSupabaseBrowserClient(): MockSupabaseClient {
 export function resetSupabaseClient() {
   mockClient = null
 }
-
-// Named export for createClient (required by other parts of the codebase)
-export const createClient = getSupabaseBrowserClient

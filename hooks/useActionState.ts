@@ -2,20 +2,32 @@
 
 import { useState, useTransition } from "react"
 
-export function useActionState<T, U>(action: (formData: FormData) => Promise<T>, initialState?: U) {
-  const [state, setState] = useState<U | undefined>(initialState)
+type ActionState<T> = {
+  data?: T
+  error?: string
+  success?: boolean
+}
+
+export function useActionState<T, P>(
+  action: (prevState: ActionState<T>, formData: P) => Promise<ActionState<T>>,
+  initialState: ActionState<T>,
+): [ActionState<T>, (formData: P) => void, boolean] {
+  const [state, setState] = useState<ActionState<T>>(initialState)
   const [isPending, startTransition] = useTransition()
 
-  const formAction = (formData: FormData) => {
+  const formAction = (formData: P) => {
     startTransition(async () => {
       try {
-        const result = await action(formData)
-        setState(result as unknown as U)
+        const result = await action(state, formData)
+        setState(result)
       } catch (error) {
-        console.error("Action error:", error)
+        setState({
+          error: error instanceof Error ? error.message : "An error occurred",
+          success: false,
+        })
       }
     })
   }
 
-  return [state, formAction, isPending] as const
+  return [state, formAction, isPending]
 }
