@@ -1,11 +1,8 @@
-export default function HomePage() {
+export default function Home() {
   return (
-    <div>
-      <h1>AgentFlow Platform</h1>
-      <p>Welcome to the minimal AgentFlow platform.</p>
-      <nav>
-        <a href="/login">Login</a> | <a href="/dashboard">Dashboard</a>
-      </nav>
-    </div>
+    <main>
+      <h1>Welcome to Minimal Next.js App</h1>
+      <p>This is a minimal Next.js application with no external dependencies.</p>
+    </main>
   )
 }
