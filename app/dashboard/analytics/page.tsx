@@ -1,26 +1,15 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { getDefaultUserId } from "@/lib/default-user"
-import { redirect } from "next/navigation"
 import type { Metadata } from "next"
 import AnalyticsDashboard from "@/components/analytics-dashboard"
-import { Suspense } from "react"
-import { Loader2 } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Analytics - AgentFlow",
+  title: "Analytics Dashboard",
+  description: "Monitor your agent performance and system metrics",
 }
 
-async function AnalyticsDataFetcher() {
+async function AnalyticsDataFetcher(userId: string) {
   const adminSupabase = getSupabaseAdmin()
-  let userId: string
-
-  try {
-    userId = await getDefaultUserId()
-  } catch (error) {
-    console.error("Failed to get default user ID for analytics:", error)
-    redirect("/login")
-  }
 
   // Fetch comprehensive analytics data
   const [
@@ -71,35 +60,23 @@ async function AnalyticsDataFetcher() {
 }
 
 export default async function AnalyticsPage() {
-  return (
-    <main className="flex-1 p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Analytics Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Insights into your agent performance, task completion, and productivity trends.
-        </p>
-      </div>
+  try {
+    const userId = await getDefaultUserId()
 
-      <Suspense
-        fallback={
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {[...Array(8)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Loading...</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center h-20">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#007AFF]" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        }
-      >
-        <AnalyticsDataFetcher />
-      </Suspense>
-    </main>
-  )
+    return (
+      <div className="container mx-auto py-6">
+        <AnalyticsDashboard userId={userId} />
+      </div>
+    )
+  } catch (error) {
+    console.error("Error loading analytics page:", error)
+    return (
+      <div className="container mx-auto py-6">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-red-600">Error Loading Analytics</h1>
+          <p className="text-gray-600 mt-2">There was an error loading the analytics dashboard.</p>
+        </div>
+      </div>
+    )
+  }
 }

@@ -3,7 +3,7 @@
 import { getSupabaseFromServer, getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDefaultUserId } from "@/lib/default-user"
-import { agentExecutionEngine } from "@/lib/agent-execution-engine"
+import { executionQueue } from "@/lib/agent-execution-engine"
 import { LLMService } from "@/lib/llm-service"
 
 export interface ExecutionResult {
@@ -11,6 +11,7 @@ export interface ExecutionResult {
   message?: string
   error?: string
   logs?: string[]
+  queueId?: string
 }
 
 export async function startAgentExecution(agentId: string): Promise<ExecutionResult> {
@@ -66,18 +67,14 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
 
     console.log(`✅ Found agent: ${agent.name} (${agent.id})`)
 
-    // Update agent status to active
-    const { error: updateError } = await supabaseAdmin
-      .from("agents")
-      .update({
-        status: "active",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", agentId)
-
-    if (updateError) {
-      console.error("Error updating agent status:", updateError)
-      return { success: false, error: "Failed to activate agent." }
+    // Check if agent is already queued or running
+    const queueStatus = await executionQueue.getAgentQueueStatus(agentId)
+    if (queueStatus) {
+      return {
+        success: false,
+        error: `Agent execution is already ${queueStatus.status}. Please wait for it to complete.`,
+        logs: [`⏳ Agent is currently ${queueStatus.status}`],
+      }
     }
 
     // Check for existing tasks
@@ -136,27 +133,48 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
       console.log("✅ Created initial tasks")
     }
 
-    // Start the real AI execution using user's LLM providers
-    console.log("🚀 Starting AI execution engine with user's LLM providers")
-    const executionResult = await agentExecutionEngine.startAgentExecution(agentId)
+    // Add to execution queue
+    console.log("📋 Adding agent to execution queue")
+    const queueResult = await executionQueue.enqueueExecution(agentId, userId, {
+      priority: "high",
+      metadata: {
+        agent_name: agent.name,
+        available_providers: availableProviders,
+      },
+    })
 
-    if (!executionResult.success) {
+    if (!queueResult.success) {
       return {
         success: false,
-        error: executionResult.error || "Failed to start AI execution",
+        error: queueResult.error || "Failed to add to execution queue",
       }
     }
 
-    // Log that agent was started
+    // Update agent status to active
+    const { error: updateError } = await supabaseAdmin
+      .from("agents")
+      .update({
+        status: "active",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agentId)
+
+    if (updateError) {
+      console.error("Error updating agent status:", updateError)
+      return { success: false, error: "Failed to activate agent." }
+    }
+
+    // Log that agent was queued
     await supabaseAdmin.from("agent_logs").insert({
       agent_id: agentId,
       user_id: userId,
       log_type: "milestone",
-      message: `🚀 Agent execution started using your ${availableProviders.join(", ")} provider(s)`,
+      message: `🚀 Agent added to execution queue using your ${availableProviders.join(", ")} provider(s)`,
       metadata: {
-        execution_type: "ai_powered",
+        execution_type: "queued",
         available_providers: availableProviders,
         providers_count: availableProviders.length,
+        queue_id: queueResult.queueId,
       },
       created_at: new Date().toISOString(),
     })
@@ -166,13 +184,13 @@ export async function startAgentExecution(agentId: string): Promise<ExecutionRes
 
     return {
       success: true,
-      message: `Agent execution started successfully using your ${availableProviders.join(", ")} provider(s)`,
+      message: `Agent execution queued successfully using your ${availableProviders.join(", ")} provider(s)`,
+      queueId: queueResult.queueId,
       logs: [
-        "🚀 Agent execution started",
+        "🚀 Agent execution queued",
         `🔑 Using your ${availableProviders.join(", ")} provider(s)`,
-        "🧠 AI engine initialized",
-        "📋 Processing tasks with your LLM",
-        "⚡ Real-time execution in progress",
+        "📋 Added to execution queue",
+        "⚡ Will start processing shortly",
       ],
     }
   } catch (error) {
@@ -188,6 +206,22 @@ export async function stopAgentExecution(agentId: string): Promise<ExecutionResu
   try {
     const supabaseAdmin = getSupabaseAdmin()
     const userId = await getDefaultUserId()
+
+    // Check if agent is in queue
+    const queueStatus = await executionQueue.getAgentQueueStatus(agentId)
+    if (queueStatus && queueStatus.status === "pending") {
+      // Cancel queued execution
+      const cancelResult = await executionQueue.cancelExecution(queueStatus.id)
+      if (cancelResult.success) {
+        await supabaseAdmin.from("agent_logs").insert({
+          agent_id: agentId,
+          user_id: userId,
+          log_type: "info",
+          message: "⏹️ Agent execution cancelled from queue",
+          created_at: new Date().toISOString(),
+        })
+      }
+    }
 
     // Update agent status to paused
     const { error } = await supabaseAdmin
