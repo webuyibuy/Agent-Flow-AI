@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDecryptedApiKey } from "@/app/dashboard/settings/profile/api-key-actions"
+import { AgentOrchestrator } from "@/lib/agent-orchestrator"
 
 const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000000"
 const DEFAULT_USER_DISPLAY_NAME = "Default User"
@@ -100,7 +101,7 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
     const maxLength = 164
     const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(userMessageLength * 1.5)))
 
-    const systemPrompt = `You are a professional ${templateName} AI assistant. You are helping someone configure an AI agent like yourself.
+    const systemPrompt = `You are a professional ${templateName} AI assistant helping someone configure an AI agent.
 
 IMPORTANT FORMATTING INSTRUCTIONS:
 1. Always start your response with a simple greeting and question
@@ -108,9 +109,10 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 3. Target response length: approximately ${targetLength} characters
 4. Be concise but helpful
 5. Use a conversational, friendly tone
-6. If the user asks a complex question, break it down into simpler parts
+6. Ask specific questions about their goals, industry, and needs
+7. Focus on understanding what tasks they want the agent to help with
 
-Your role is to be helpful, friendly, and concise.`
+Your role is to gather information to create an effective AI agent for their specific needs.`
 
     messages.push({ role: "system", content: systemPrompt })
 
@@ -210,8 +212,15 @@ Your role is to be helpful, friendly, and concise.`
       extractedData = await extractAgentInfo(messages, openaiKey, debugInfo)
     }
 
+    // Step 7: Generate suggestions based on conversation
+    let suggestions: string[] = []
+    if (conversationCount >= 2) {
+      console.log(`💡 [DEBUG] Generating suggestions...`)
+      suggestions = await generateSuggestions(messages, templateName, openaiKey, debugInfo)
+    }
+
     const updatedAgentData = { ...currentAgentData, ...extractedData }
-    const shouldShowButton = conversationCount >= 4
+    const shouldShowButton = conversationCount >= 3 // Reduced from 4 to 3 for faster flow
 
     return {
       success: true,
@@ -219,7 +228,7 @@ Your role is to be helpful, friendly, and concise.`
       agentData: updatedAgentData,
       setupComplete: shouldShowButton,
       conversationCount: isInitial ? 0 : conversationCount + 1,
-      suggestions: [],
+      suggestions: suggestions,
       apiCallMade: true,
       debugInfo,
     }
@@ -252,12 +261,14 @@ ${messages
   .map((msg) => `${msg.role}: ${msg.content}`)
   .join("\n")}
 
-Return ONLY a JSON object:
+Return ONLY a JSON object with these fields:
 {
-  "name": "suggested agent name",
-  "goal": "what they want to accomplish", 
-  "behavior": "how they want the agent to behave",
-  "focus_area": "main area of focus"
+  "name": "suggested agent name (max 50 chars)",
+  "goal": "what they want to accomplish (max 200 chars)", 
+  "behavior": "how they want the agent to behave (max 200 chars)",
+  "focus_area": "main area of focus",
+  "industry": "their industry if mentioned",
+  "key_tasks": ["task1", "task2", "task3"]
 }
 
 Return valid JSON only.`
@@ -274,7 +285,7 @@ Return valid JSON only.`
           { role: "system", content: "Extract information and return only valid JSON." },
           { role: "user", content: extractPrompt },
         ],
-        max_tokens: 150,
+        max_tokens: 200,
         temperature: 0.1,
       }),
     })
@@ -302,6 +313,73 @@ Return valid JSON only.`
   }
 
   return {}
+}
+
+async function generateSuggestions(
+  messages: Array<{ role: string; content: string }>,
+  templateName: string,
+  openaiKey: string,
+  debugInfo: any,
+): Promise<string[]> {
+  try {
+    console.log(`💡 [DEBUG] Making suggestion API call...`)
+
+    const suggestionPrompt = `Based on this conversation about setting up a ${templateName} agent, suggest 3 specific questions to ask next.
+
+Conversation:
+${messages
+  .slice(-4)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+
+Provide 3 specific follow-up questions as a JSON array:
+["What specific tasks should I help you with?", "What's your main goal?", "How can I best assist you?"]
+
+Make questions practical and conversational.`
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "Generate practical follow-up questions. Return JSON array only.",
+          },
+          { role: "user", content: suggestionPrompt },
+        ],
+        max_tokens: 100,
+        temperature: 0.7,
+      }),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const jsonString = data.choices?.[0]?.message?.content || "[]"
+
+      try {
+        const suggestions = JSON.parse(jsonString)
+        console.log(`✅ [DEBUG] Suggestions:`, suggestions)
+        debugInfo.suggestionsSuccessful = true
+        return Array.isArray(suggestions) ? suggestions.slice(0, 3) : []
+      } catch (parseError) {
+        console.log(`⚠️ [DEBUG] Suggestions JSON parse failed: ${jsonString}`)
+        debugInfo.suggestionsParseError = jsonString
+      }
+    } else {
+      console.log(`❌ [DEBUG] Suggestions API failed: ${response.status}`)
+      debugInfo.suggestionsApiFailed = response.status
+    }
+  } catch (error) {
+    console.error(`❌ [DEBUG] Suggestions error:`, error)
+    debugInfo.suggestionsError = error instanceof Error ? error.message : String(error)
+  }
+
+  return []
 }
 
 async function ensureUserProfileExists(
@@ -366,6 +444,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
   success: boolean
   redirectUrl?: string
   error?: string
+  agentId?: string
 }> {
   try {
     const { agentData, userId: originalUserId } = request
@@ -387,7 +466,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const validUserId = userResult.validUserId
     console.log(`✅ [DEBUG] Using valid user ID: ${validUserId}`)
 
-    // Step 2: Create agent with valid user ID
+    // Step 2: Create agent with extracted data
     const agentName = agentData.name || `My ${agentData.templateName || "Agent"}`
     const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName || "AI"} assistant`
@@ -409,6 +488,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         owner_id: validUserId,
         template_slug: agentData.templateSlug || "custom",
         status: "active",
+        agent_type: agentData.templateName || "Custom Agent",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -417,8 +497,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     if (agentError) {
       console.error(`❌ [DEBUG] Error creating agent:`, agentError)
-      console.error(`❌ [DEBUG] Full error details:`, JSON.stringify(agentError, null, 2))
-
       return {
         success: false,
         error: `Failed to create agent: ${agentError.message}`,
@@ -435,7 +513,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     console.log(`✅ [DEBUG] Agent created successfully: ${agent.name} (${agent.id})`)
 
-    // Step 3: Store conversation data (optional)
+    // Step 3: Store conversation data
     try {
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
@@ -449,6 +527,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
           ...agentData,
           created_via: "real_openai_conversation",
           original_user_id: originalUserId,
+          conversation_summary: `Agent configured through AI chat for ${agentData.templateName || "general"} tasks`,
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -463,15 +542,35 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       console.warn(`⚠️ [DEBUG] Warning: Error storing conversation data:`, customDataError)
     }
 
-    // Step 4: Revalidate paths
+    // Step 4: Start the agent with intelligent orchestration
+    try {
+      console.log(`🚀 [DEBUG] Starting agent orchestration...`)
+
+      await AgentOrchestrator.startAgent({
+        agentId: agent.id,
+        agentName: agent.name,
+        agentGoal: agentGoal,
+        userId: validUserId,
+      })
+
+      console.log(`✅ [DEBUG] Agent orchestration started successfully`)
+    } catch (orchestrationError) {
+      console.warn(`⚠️ [DEBUG] Warning: Agent orchestration failed:`, orchestrationError)
+      // Don't fail the whole operation for this
+    }
+
+    // Step 5: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
+    revalidatePath(`/dashboard/agents/${agent.id}`)
+    revalidatePath("/dashboard/dependencies")
 
     console.log(`🎉 [DEBUG] Agent setup completed successfully!`)
 
     return {
       success: true,
       redirectUrl: `/dashboard/agents/${agent.id}`,
+      agentId: agent.id,
     }
   } catch (error) {
     console.error(`💥 [DEBUG] Unexpected error in completeAgentSetup:`, error)
@@ -479,5 +578,79 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       success: false,
       error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
     }
+  }
+}
+
+export async function acceptSuggestion(
+  suggestion: string,
+  userId: string,
+  currentAgentData: any,
+): Promise<{ success: boolean; message?: string; agentData?: any }> {
+  try {
+    console.log(`✅ User accepted suggestion: "${suggestion}"`)
+
+    const openaiKey = await getDecryptedApiKey("openai", userId)
+    if (!openaiKey) {
+      return { success: false, message: "OpenAI API key required" }
+    }
+
+    console.log(`🚀 Making API call to process accepted suggestion...`)
+
+    const suggestionLength = suggestion.length
+    const minLength = 10
+    const maxLength = 164
+    const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(suggestionLength * 1.2)))
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: `The user accepted a suggestion. Provide a helpful response.
+            
+IMPORTANT FORMATTING INSTRUCTIONS:
+1. Always start your response with a simple greeting and question
+2. Keep your response between ${minLength} and ${maxLength} characters
+3. Target response length: approximately ${targetLength} characters
+4. Be concise but helpful
+5. Use a conversational, friendly tone`,
+          },
+          {
+            role: "user",
+            content: `I accepted this suggestion: "${suggestion}". Please provide next steps.`,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.8,
+      }),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const message = data.choices?.[0]?.message?.content || "Great choice! Let's continue."
+
+      console.log(`✅ Processed suggestion acceptance`)
+
+      return {
+        success: true,
+        message,
+        agentData: {
+          ...currentAgentData,
+          accepted_suggestions: [...(currentAgentData.accepted_suggestions || []), suggestion],
+          last_suggestion_accepted: suggestion,
+        },
+      }
+    }
+
+    return { success: false, message: "Failed to process suggestion" }
+  } catch (error) {
+    console.error("Error accepting suggestion:", error)
+    return { success: false, message: "Error processing suggestion" }
   }
 }

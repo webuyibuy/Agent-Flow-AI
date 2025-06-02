@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings, CheckCircle } from "lucide-react"
-import { generateChatResponse, completeAgentSetup } from "@/app/onboarding/agent-config/chat-actions"
+import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings, CheckCircle, Bot, Zap } from "lucide-react"
+import { generateChatResponse, completeAgentSetup, acceptSuggestion } from "@/app/onboarding/agent-config/chat-actions"
 import type { AgentTemplate } from "@/lib/agent-templates"
 
 interface Message {
@@ -36,6 +36,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
   const [error, setError] = useState<string | null>(null)
   const [apiCallsMade, setApiCallsMade] = useState(0)
   const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [agentData, setAgentData] = useState<any>({
     templateSlug,
     templateName,
@@ -103,13 +104,15 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           }))
         }
 
+        if (response.suggestions) {
+          setSuggestions(response.suggestions)
+        }
+
         setConversationCount(0)
       } else {
-        // Show error but add a helpful message about API key
         setError(response.error || "Failed to get AI response")
         console.error("❌ [CLIENT] API call failed:", response.error)
 
-        // Add a helpful message about adding API key
         if (response.error?.includes("API key")) {
           setMessages([
             {
@@ -193,6 +196,10 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           }))
         }
 
+        if (response.suggestions) {
+          setSuggestions(response.suggestions)
+        }
+
         if (response.conversationCount !== undefined) {
           setConversationCount(response.conversationCount)
         }
@@ -201,13 +208,51 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           setSetupComplete(true)
         }
       } else {
-        // Show error
         setError(response.error || "Failed to get AI response")
         console.error("❌ [CLIENT] API call failed:", response.error)
       }
     } catch (error) {
       console.error("💥 [CLIENT] Error:", error)
       setError("Failed to send message. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSuggestionClick = async (suggestion: string) => {
+    setIsLoading(true)
+    try {
+      const response = await acceptSuggestion(suggestion, userId, agentData)
+
+      if (response.success && response.message) {
+        // Add the suggestion as user message
+        const suggestionMessage = {
+          id: `suggestion-${Date.now()}`,
+          role: "user" as const,
+          content: suggestion,
+        }
+
+        // Add AI response
+        const aiMessage = {
+          id: `ai-${Date.now()}`,
+          role: "assistant" as const,
+          content: response.message,
+        }
+
+        setMessages((prev) => [...prev, suggestionMessage, aiMessage])
+
+        if (response.agentData) {
+          setAgentData((prev) => ({
+            ...prev,
+            ...response.agentData,
+          }))
+        }
+
+        setConversationCount((prev) => prev + 1)
+        setSuggestions([]) // Clear suggestions after use
+      }
+    } catch (error) {
+      console.error("Error handling suggestion:", error)
     } finally {
       setIsLoading(false)
     }
@@ -223,18 +268,23 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
   const handleCreateAgent = async () => {
     setIsLoading(true)
     try {
+      console.log("🎯 [CLIENT] Creating agent with data:", agentData)
+
       const result = await completeAgentSetup({
         agentData,
         userId,
       })
 
+      console.log("📋 [CLIENT] Agent creation result:", result)
+
       if (result.success && result.redirectUrl) {
+        console.log("✅ [CLIENT] Redirecting to:", result.redirectUrl)
         router.push(result.redirectUrl)
       } else {
         setError(result.error || "Failed to create agent")
       }
     } catch (error) {
-      console.error("Error creating agent:", error)
+      console.error("💥 [CLIENT] Error creating agent:", error)
       setError("Failed to create agent. Please try again.")
     } finally {
       setIsLoading(false)
@@ -250,22 +300,26 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <img
-            src={`/placeholder.svg?height=48&width=48&query=${encodeURIComponent(templateName)}`}
-            alt={templateName}
-            className="w-12 h-12 rounded-full border-2 border-gray-200"
-          />
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+            <Bot className="h-6 w-6 text-white" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{templateName} Configuration</h1>
-            <p className="text-gray-600 dark:text-gray-400">Real OpenAI API conversation</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{templateName} Setup</h1>
+            <p className="text-gray-600 dark:text-gray-400">AI-powered agent configuration</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
           <Badge variant={apiCallsMade > 0 ? "default" : "secondary"} className="bg-green-600">
             <CheckCircle className="h-3 w-3 mr-1" />
-            {apiCallsMade} Real API calls
+            {apiCallsMade} API calls
           </Badge>
+          {setupComplete && (
+            <Badge variant="default" className="bg-purple-600">
+              <Zap className="h-3 w-3 mr-1" />
+              Ready to Create
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -275,24 +329,12 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           <CardContent className="p-3">
             <div className="text-xs space-y-1">
               <div>
-                <strong>Debug:</strong> API Key Found: {debugInfo.apiKeyFound ? "✅" : "❌"} |
-                {debugInfo.apiKeyValid === false ? " Invalid Format" : ""} |
-                {debugInfo.apiKeyLength ? ` Length: ${debugInfo.apiKeyLength}` : ""}
+                <strong>Status:</strong> API Key: {debugInfo.apiKeyFound ? "✅" : "❌"} | Call:{" "}
+                {debugInfo.apiCallSuccessful ? "✅" : "❌"} | Duration: {debugInfo.apiCallDuration}ms
               </div>
-              {debugInfo.apiCallDuration && (
-                <div>
-                  <strong>API Call:</strong> {debugInfo.apiCallSuccessful ? "✅" : "❌"} | Duration:{" "}
-                  {debugInfo.apiCallDuration}ms
-                </div>
-              )}
               {debugInfo.tokensUsed && (
                 <div>
-                  <strong>Tokens:</strong> {debugInfo.tokensUsed}
-                </div>
-              )}
-              {debugInfo.apiError && (
-                <div className="text-red-600">
-                  <strong>API Error:</strong> {debugInfo.apiError}
+                  <strong>Usage:</strong> {debugInfo.tokensUsed} tokens | Response: {debugInfo.aiMessageLength} chars
                 </div>
               )}
             </div>
@@ -319,12 +361,12 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
       {/* Progress */}
       {conversationCount > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-          <span>Progress: {conversationCount}/5 exchanges</span>
+          <span>Progress: {conversationCount}/3 exchanges</span>
           <div className="flex space-x-1">
-            {[1, 2, 3, 4, 5].map((step) => (
+            {[1, 2, 3].map((step) => (
               <div
                 key={step}
-                className={`w-2 h-2 rounded-full ${step <= conversationCount ? "bg-green-600" : "bg-gray-300"}`}
+                className={`w-3 h-3 rounded-full ${step <= conversationCount ? "bg-green-600" : "bg-gray-300"}`}
               />
             ))}
           </div>
@@ -348,7 +390,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
                   {message.debugInfo?.apiCallSuccessful && (
                     <div className="mt-2 text-xs opacity-70 flex items-center">
                       <CheckCircle className="h-3 w-3 mr-1" />
-                      Real OpenAI response ({message.debugInfo.tokensUsed} tokens)
+                      Real OpenAI ({message.debugInfo.tokensUsed} tokens)
                     </div>
                   )}
                 </div>
@@ -356,12 +398,29 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
             </div>
           ))}
 
+          {/* Suggestions */}
+          {suggestions.length > 0 && !isLoading && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {suggestions.map((suggestion, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className="text-xs bg-purple-50 hover:bg-purple-100 border-purple-200"
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800">
                 <div className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-gray-500 text-sm">Making real OpenAI API call...</span>
+                  <span className="text-gray-500 text-sm">AI is thinking...</span>
                 </div>
               </div>
             </div>
@@ -405,17 +464,35 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         </Button>
       )}
 
-      {/* Agent Data */}
+      {/* Agent Data Preview */}
       {Object.keys(agentData).length > 2 && (
         <Card>
           <CardContent className="p-4">
-            <h3 className="text-sm font-medium mb-2">Extracted Agent Data</h3>
+            <h3 className="text-sm font-medium mb-2 flex items-center">
+              <Bot className="h-4 w-4 mr-2" />
+              Agent Configuration
+            </h3>
             <div className="text-xs space-y-1 text-gray-600">
-              {Object.entries(agentData).map(([key, value]) => (
-                <div key={key}>
-                  <strong>{key}:</strong> {String(value)}
+              {agentData.name && (
+                <div>
+                  <strong>Name:</strong> {agentData.name}
                 </div>
-              ))}
+              )}
+              {agentData.goal && (
+                <div>
+                  <strong>Goal:</strong> {agentData.goal}
+                </div>
+              )}
+              {agentData.focus_area && (
+                <div>
+                  <strong>Focus:</strong> {agentData.focus_area}
+                </div>
+              )}
+              {agentData.industry && (
+                <div>
+                  <strong>Industry:</strong> {agentData.industry}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -425,17 +502,17 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
       {setupComplete && (
         <Button
           onClick={handleCreateAgent}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+          className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white py-6 text-lg font-semibold"
           disabled={isLoading}
         >
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Agent...
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Agent & Tasks...
             </>
           ) : (
             <>
               <Sparkles className="mr-2 h-5 w-5" />
-              Create Agent <ArrowRight className="ml-2 h-5 w-5" />
+              Create Agent & Start Working <ArrowRight className="ml-2 h-5 w-5" />
             </>
           )}
         </Button>
