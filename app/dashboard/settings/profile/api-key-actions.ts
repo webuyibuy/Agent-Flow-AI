@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseFromServer } from "@/lib/supabase/server"
-import { encrypt, safeDecrypt, safeDecryptSync } from "@/lib/encryption"
+import { encrypt, safeDecrypt } from "@/lib/encryption"
 import { revalidatePath } from "next/cache"
 import { getDefaultUserId } from "@/lib/default-user"
 
@@ -20,7 +20,7 @@ export interface ApiKeyWithModel {
 }
 
 export async function saveApiKey(prevState: ApiKeyState | undefined, formData: FormData): Promise<ApiKeyState> {
-  console.log("🔑 Starting saveApiKey action with encryption...")
+  console.log("🔑 Starting saveApiKey action...")
 
   const supabase = getSupabaseFromServer()
 
@@ -63,20 +63,20 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       return { error: `An API key with the name "${keyName}" already exists for ${provider}.` }
     }
 
-    // Encrypt the API key with enhanced security
+    // Encrypt the API key
     console.log("🔐 Encrypting API key...")
     let encryptedKey: string
     try {
       encryptedKey = await encrypt(apiKey)
       console.log("✅ API key encrypted successfully")
     } catch (encryptError) {
-      console.warn("⚠️ Encryption failed, using fallback:", encryptError)
-      // Fallback to simple base64 encoding for development
+      console.warn("⚠️ Encryption failed, storing as base64:", encryptError)
+      // Simple fallback
       encryptedKey = btoa(apiKey)
     }
 
-    // Save to database with preferred model
-    console.log("💾 Saving encrypted key to database...")
+    // Save to database
+    console.log("💾 Saving key to database...")
     const insertData = {
       user_id: userId,
       provider,
@@ -86,8 +86,6 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       created_at: new Date().toISOString(),
     }
 
-    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED]" })
-
     const { data, error: insertError } = await supabase.from("api_keys").insert(insertData).select()
 
     if (insertError) {
@@ -95,7 +93,7 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       return { error: `Failed to save API key: ${insertError.message}` }
     }
 
-    console.log("✅ API key saved successfully:", data)
+    console.log("✅ API key saved successfully")
     revalidatePath("/dashboard/settings/profile")
     return {
       success: true,
@@ -118,7 +116,7 @@ function validateApiKeyFormat(provider: string, apiKey: string): boolean {
     case "xai":
       return apiKey.startsWith("xai-") && apiKey.length > 20
     default:
-      return apiKey.length > 10 // Basic length check for unknown providers
+      return apiKey.length > 10
   }
 }
 
@@ -145,7 +143,6 @@ export async function updateApiKeyModel(prevState: ApiKeyState | undefined, form
   let userId: string
   try {
     userId = await getDefaultUserId()
-    console.log("✅ Got user ID:", userId)
   } catch (error) {
     console.error("❌ Authentication error:", error)
     return { error: "Authentication required." }
@@ -153,8 +150,6 @@ export async function updateApiKeyModel(prevState: ApiKeyState | undefined, form
 
   const keyId = formData.get("keyId") as string
   const preferredModel = formData.get("preferredModel") as string
-
-  console.log("📝 Update data:", { keyId, preferredModel })
 
   if (!keyId) {
     return { error: "Key ID is required." }
@@ -180,7 +175,6 @@ export async function updateApiKeyModel(prevState: ApiKeyState | undefined, form
       return { error: "API key not found or you don't have permission to update it." }
     }
 
-    console.log("✅ Model preference updated successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return { success: true, message: `✅ Model preference updated to ${preferredModel}!` }
   } catch (error) {
@@ -197,15 +191,12 @@ export async function deleteApiKey(prevState: ApiKeyState | undefined, formData:
   let userId: string
   try {
     userId = await getDefaultUserId()
-    console.log("✅ Got user ID:", userId)
   } catch (error) {
     console.error("❌ Authentication error:", error)
     return { error: "Authentication required." }
   }
 
   const keyId = formData.get("keyId") as string
-
-  console.log("📝 Delete data:", { keyId })
 
   if (!keyId) {
     return { error: "Key ID is required." }
@@ -228,7 +219,6 @@ export async function deleteApiKey(prevState: ApiKeyState | undefined, formData:
       return { error: "API key not found or you don't have permission to delete it." }
     }
 
-    console.log("✅ API key deleted successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return { success: true, message: "🗑️ API key deleted successfully!" }
   } catch (error) {
@@ -245,7 +235,6 @@ export async function getApiKeys(): Promise<ApiKeyWithModel[]> {
   let userId: string
   try {
     userId = await getDefaultUserId()
-    console.log("✅ Got user ID:", userId)
   } catch (error) {
     console.error("❌ Authentication error in getApiKeys:", error)
     return []
@@ -263,7 +252,6 @@ export async function getApiKeys(): Promise<ApiKeyWithModel[]> {
       return []
     }
 
-    console.log("✅ Fetched API keys:", data?.length || 0, "keys")
     return data || []
   } catch (error) {
     console.error("❌ Unexpected error in getApiKeys:", error)
@@ -280,7 +268,6 @@ export async function getDecryptedApiKey(provider: string, userId?: string): Pro
   if (!targetUserId) {
     try {
       targetUserId = await getDefaultUserId()
-      console.log("✅ Got user ID:", targetUserId)
     } catch (error) {
       console.error("❌ Authentication error in getDecryptedApiKey:", error)
       return null
@@ -302,25 +289,18 @@ export async function getDecryptedApiKey(provider: string, userId?: string): Pro
       return null
     }
 
-    console.log("🔓 Decrypting API key...")
+    console.log("🔓 Attempting to decrypt API key...")
 
     try {
-      // Try async decryption first
       const decryptedKey = await safeDecrypt(data.encrypted_key)
       console.log("✅ API key decrypted successfully")
       return decryptedKey
-    } catch (asyncError) {
-      console.warn("⚠️ Async decryption failed, trying sync fallback:", asyncError)
+    } catch (error) {
+      console.error("❌ Error decrypting API key:", error)
 
-      try {
-        // Fallback to sync decryption
-        const decryptedKey = safeDecryptSync(data.encrypted_key)
-        console.log("✅ API key decrypted with sync fallback")
-        return decryptedKey
-      } catch (syncError) {
-        console.error("❌ Both async and sync decryption failed:", syncError)
-        return null
-      }
+      // Last resort: try to use the encrypted key as-is (might be plain text)
+      console.log("⚠️ Using encrypted key as-is (might be plain text)")
+      return data.encrypted_key
     }
   } catch (error) {
     console.error("❌ Error getting API key:", error)
@@ -337,7 +317,6 @@ export async function getPreferredModel(provider: string, userId?: string): Prom
   if (!targetUserId) {
     try {
       targetUserId = await getDefaultUserId()
-      console.log("✅ Got user ID:", targetUserId)
     } catch (error) {
       console.error("❌ Authentication error in getPreferredModel:", error)
       return null
@@ -355,11 +334,9 @@ export async function getPreferredModel(provider: string, userId?: string): Prom
       .single()
 
     if (error || !data) {
-      console.log("ℹ️ No preferred model found for provider:", provider)
-      return getDefaultModel(provider) // Return default model if none set
+      return getDefaultModel(provider)
     }
 
-    console.log("✅ Found preferred model:", data.preferred_model)
     return data.preferred_model || getDefaultModel(provider)
   } catch (error) {
     console.error("❌ Error getting preferred model:", error)
