@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 let supabaseClient: SupabaseClient | null = null
@@ -39,7 +39,7 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   }
 
   try {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    supabaseClient = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -62,4 +62,4 @@ export function resetSupabaseClient() {
 }
 
 // Named export for createClient (required by other parts of the codebase)
-export { getSupabaseBrowserClient as createClient }
+export const createClient = getSupabaseBrowserClient

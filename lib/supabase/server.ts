@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 // Mock client for development/testing
@@ -31,7 +31,7 @@ export function getSupabaseFromServer() {
   }
 
   try {
-    const client = createClient(supabaseUrl, supabaseAnonKey, {
+    const client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -58,7 +58,7 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   try {
     // Create admin client with service role key (bypasses RLS)
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -87,7 +87,7 @@ export async function getSupabaseServerWithCookies() {
   try {
     // For now, return the same client as getSupabaseFromServer
     // In a full implementation, this would handle cookies differently
-    const client = createClient(supabaseUrl, supabaseAnonKey, {
+    const client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -104,4 +104,4 @@ export async function getSupabaseServerWithCookies() {
 }
 
 // Export createClient for compatibility
-export { createClient } from "@supabase/supabase-js"
+export const createClient = createSupabaseClient
