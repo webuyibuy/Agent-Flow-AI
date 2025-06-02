@@ -1,27 +1,41 @@
+import { Suspense } from "react"
+import { getDefaultUserId } from "@/lib/default-user"
 import { redirect } from "next/navigation"
-import { getSupabaseFromServer } from "@/lib/supabase/server"
-import ModernAgentConfig from "@/components/modern-agent-config"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import AgentConfigForm from "@/components/agent-config-form"
+import { getTemplateById } from "@/lib/agent-templates"
 
-export default async function AgentConfigPage() {
-  const supabase = getSupabaseFromServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+export default async function AgentConfigPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
+  let userId: string
+  try {
+    userId = await getDefaultUserId()
+  } catch (error) {
     redirect("/login")
   }
 
-  // Get the user's goal primer from the previous step
-  const { data: goalData } = await supabase
-    .from("agent_custom_data")
-    .select("agent_goal")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single()
+  const templateSlug = typeof searchParams.template === "string" ? searchParams.template : "custom"
+  const template = getTemplateById(templateSlug)
+  const templateName = template?.name || "Custom Agent"
 
-  const goalPrimer = goalData?.agent_goal || "Create an AI agent to help with business tasks"
-
-  return <ModernAgentConfig goalPrimer={goalPrimer} />
+  return (
+    <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
+      <Suspense
+        fallback={
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p>Loading agent configuration...</p>
+            </CardContent>
+          </Card>
+        }
+      >
+        <AgentConfigForm templateSlug={templateSlug} templateName={templateName} />
+      </Suspense>
+    </div>
+  )
 }

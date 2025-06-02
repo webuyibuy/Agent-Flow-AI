@@ -17,27 +17,27 @@ interface AgentConfigFormProps {
 }
 
 const templatePlaceholders: Record<string, { goal?: string; behavior?: string }> = {
-  sales: {
+  "sales-lead-generator": {
     goal: "e.g., Generate 20 qualified leads per week for Product X.",
     behavior:
       "Proactively reach out to prospects on LinkedIn, follow up via email, and schedule demos for interested leads. Focus on tech startups in North America.",
   },
-  marketing: {
+  "marketing-content-manager": {
     goal: "e.g., Increase social media engagement by 15% this quarter.",
     behavior:
       "Create and schedule engaging content for Twitter and LinkedIn, monitor brand mentions, and run targeted ad campaigns for new feature announcements.",
   },
-  dev: {
+  "developer-assistant": {
     goal: "e.g., Automate the deployment pipeline for the main application.",
     behavior:
       "Monitor the main branch for new commits, run automated tests, build the application, and deploy to staging. Notify the team on Slack of successes or failures.",
   },
-  hr: {
+  "hr-recruitment-specialist": {
     goal: "e.g., Shortlist 5 top candidates for the Senior Engineer role by end of next week.",
     behavior:
       "Source candidates from LinkedIn Recruiter and job boards, screen resumes based on predefined criteria, conduct initial automated screenings, and schedule interviews for qualified candidates.",
   },
-  custom: {
+  "custom-agent": {
     goal: "e.g., Organize my research notes and draft a weekly summary.",
     behavior:
       "Monitor specific RSS feeds and websites, extract relevant information, categorize notes, and compile a structured summary document every Friday.",
@@ -50,7 +50,7 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({})
   const router = useRouter()
 
-  const placeholders = templatePlaceholders[templateSlug] || templatePlaceholders.custom
+  const placeholders = templatePlaceholders[templateSlug] || templatePlaceholders["custom-agent"]
   const [agentGoal, setAgentGoal] = useState<string>("")
 
   // Handle redirect after successful form submission
@@ -68,7 +68,8 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
           Configure Your {templateName || "Agent"}
         </h1>
         <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-          Let's set up the details for your new {templateSlug === "custom" ? "custom" : templateSlug} agent.
+          Let's set up the details for your new{" "}
+          {templateSlug === "custom-agent" ? "custom" : templateName?.toLowerCase() || "agent"}.
         </p>
       </div>
 
@@ -120,7 +121,7 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
 
         <div>
           <Label htmlFor="agentBehavior" className="font-medium text-gray-700 dark:text-gray-300">
-            Behavior / Instructions {templateSlug !== "custom" && "(Optional)"}
+            Behavior / Instructions {templateSlug !== "custom-agent" && "(Optional)"}
           </Label>
           <Textarea
             id="agentBehavior"
@@ -132,14 +133,14 @@ export default function AgentConfigForm({ templateSlug, templateName }: AgentCon
             maxLength={1000}
             className="mt-1 min-h-[120px]"
             aria-describedby="agentBehavior-error"
-            required={templateSlug === "custom"}
+            required={templateSlug === "custom-agent"}
           />
           {state?.errors?.agentBehavior && (
             <p id="agentBehavior-error" className="mt-1 text-sm text-red-600">
               {state.errors.agentBehavior.join(", ")}
             </p>
           )}
-          {templateSlug === "custom" && (
+          {templateSlug === "custom-agent" && (
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               For custom agents, be as detailed as possible.
             </p>

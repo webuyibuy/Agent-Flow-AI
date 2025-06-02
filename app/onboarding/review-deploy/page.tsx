@@ -1,12 +1,16 @@
-import { getSupabaseFromServer } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import ReviewDeployClient from "@/components/review-deploy-client"
+import { Suspense } from "react"
 import { getDefaultUserId } from "@/lib/default-user"
+import { redirect } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import ReviewDeployClient from "@/components/review-deploy-client"
+import { getTemplateById } from "@/lib/agent-templates"
 
-export default async function ReviewDeployPage() {
-  const supabase = getSupabaseFromServer()
-
-  // Get the user ID
+export default async function ReviewDeployPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   let userId: string
   try {
     userId = await getDefaultUserId()
@@ -14,20 +18,31 @@ export default async function ReviewDeployPage() {
     redirect("/login")
   }
 
-  // Get the agent configuration from session storage
-  const { data: sessionData } = await supabase.auth.getSession()
-  const agentConfig = sessionData.session?.user?.user_metadata?.onboarding_agent_config
+  const templateSlug = typeof searchParams.template === "string" ? searchParams.template : "custom-agent"
+  const agentName = typeof searchParams.name === "string" ? searchParams.name : "My Agent"
 
-  // If no agent config is found, redirect to the agent config page
-  if (!agentConfig) {
-    redirect("/onboarding/agent-config")
-  }
+  const template = getTemplateById(templateSlug)
+  const templateName = template?.name || "Custom Agent"
 
-  // Ensure the user ID is included in the agent data
-  const agentData = {
-    ...agentConfig,
-    userId,
-  }
-
-  return <ReviewDeployClient agentData={agentData} />
+  return (
+    <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
+      <Suspense
+        fallback={
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p>Loading review page...</p>
+            </CardContent>
+          </Card>
+        }
+      >
+        <ReviewDeployClient
+          userId={userId}
+          templateSlug={templateSlug}
+          templateName={templateName}
+          agentName={agentName}
+        />
+      </Suspense>
+    </div>
+  )
 }
