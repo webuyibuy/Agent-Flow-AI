@@ -7,9 +7,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Loader2, Send, ArrowRight, Sparkles } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings } from "lucide-react"
 import { generateChatResponse, completeAgentSetup } from "@/app/onboarding/agent-config/chat-actions"
 import type { AgentTemplate } from "@/lib/agent-templates"
+import Link from "next/link"
 
 interface Message {
   id: string
@@ -30,6 +32,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
   const [isLoading, setIsLoading] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
   const [conversationCount, setConversationCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
   const [agentData, setAgentData] = useState<any>({
     templateSlug,
     templateName,
@@ -61,7 +64,9 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
   const startConversation = async () => {
     setIsLoading(true)
+    setError(null)
     try {
+      console.log("Starting OpenAI conversation...")
       const response = await generateChatResponse({
         templateSlug,
         templateName,
@@ -88,16 +93,12 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         if (response.conversationCount !== undefined) {
           setConversationCount(response.conversationCount)
         }
+      } else {
+        setError(response.error || "Failed to start conversation")
       }
     } catch (error) {
       console.error("Error starting conversation:", error)
-      setMessages([
-        {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: `Hi! I'm your ${templateName}. How can I help you today?`,
-        },
-      ])
+      setError("Failed to start conversation. Please check your API key.")
     } finally {
       setIsLoading(false)
     }
@@ -108,6 +109,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
     const userMessage = input.trim()
     setInput("")
+    setError(null)
 
     // Add user message to chat
     const newUserMessage = {
@@ -125,6 +127,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     }, 100)
 
     try {
+      console.log("Sending message to OpenAI...")
       // Convert messages to the format expected by the API
       const messageHistory = messages.map((msg) => ({
         role: msg.role,
@@ -174,17 +177,12 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         if (response.setupComplete) {
           setSetupComplete(true)
         }
+      } else {
+        setError(response.error || "Failed to get response")
       }
     } catch (error) {
       console.error("Error sending message:", error)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: "I'm having trouble processing that. Could you try rephrasing?",
-        },
-      ])
+      setError("Failed to send message. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -199,6 +197,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
   const handleCreateAgent = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       console.log("Creating agent with data:", agentData)
 
@@ -212,25 +211,11 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         router.push(result.redirectUrl)
       } else {
         console.error("Agent creation failed:", result.error)
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `error-${Date.now()}`,
-            role: "assistant",
-            content: result.error || "There was an issue creating your agent. Please try again.",
-          },
-        ])
+        setError(result.error || "Failed to create agent")
       }
     } catch (error) {
       console.error("Error creating agent:", error)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: "There was an error creating your agent. Please try again.",
-        },
-      ])
+      setError("Failed to create agent. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -255,19 +240,37 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         />
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{templateName} Setup</h1>
-          <p className="text-gray-600 dark:text-gray-400">Let's chat to set up your agent</p>
+          <p className="text-gray-600 dark:text-gray-400">Real-time OpenAI conversation</p>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            {error.includes("API key") && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/dashboard/settings/profile">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Add API Key
+                </Link>
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Progress indicator */}
       {conversationCount > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-          <span>Conversation progress: {conversationCount}/5</span>
+          <span>OpenAI conversation: {conversationCount}/5</span>
           <div className="flex space-x-1">
             {[1, 2, 3, 4, 5].map((step) => (
               <div
                 key={step}
-                className={`w-2 h-2 rounded-full ${step <= conversationCount ? "bg-blue-600" : "bg-gray-300"}`}
+                className={`w-2 h-2 rounded-full ${step <= conversationCount ? "bg-green-600" : "bg-gray-300"}`}
               />
             ))}
           </div>
@@ -282,7 +285,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
               <div
                 className={`max-w-[80%] rounded-lg px-4 py-3 ${
                   message.role === "assistant"
-                    ? "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                    ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
                     : "bg-blue-600 text-white"
                 }`}
               >
@@ -296,7 +299,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
               <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800">
                 <div className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-gray-500 text-sm">Thinking...</span>
+                  <span className="text-gray-500 text-sm">OpenAI is thinking...</span>
                 </div>
               </div>
             </div>
@@ -315,11 +318,11 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
               onKeyDown={handleKeyDown}
               placeholder="Type your message and press Enter..."
               className="flex-1"
-              disabled={isLoading}
+              disabled={isLoading || !!error}
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || !!error}
               size="icon"
               className="bg-blue-600 hover:bg-blue-700"
             >
@@ -330,7 +333,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
       </Card>
 
       {/* Create Agent Button - Shows after 5 exchanges */}
-      {setupComplete && (
+      {setupComplete && !error && (
         <Button
           onClick={handleCreateAgent}
           className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
