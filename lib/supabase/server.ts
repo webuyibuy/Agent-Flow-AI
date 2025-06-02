@@ -98,3 +98,6 @@ export const getSupabaseServerWithCookies = () => supabaseServer
 
 // Export createClient for compatibility
 export const createSupabaseClient = createMockClient
+
+// Named export for createClient (required by other parts of the codebase)
+export const createClient = () => supabaseServer
