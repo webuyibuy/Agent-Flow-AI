@@ -396,9 +396,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
     console.log(`👤 [DEBUG] Original User ID: ${originalUserId}`)
 
-    // CRITICAL FIX: Use direct SQL to create the agent
-    // This bypasses any ORM issues that might be causing the foreign key constraint error
-
     // Step 1: Prepare agent data
     const agentName = agentData.name || `My ${agentData.templateName || "Agent"}`
     const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
@@ -406,41 +403,93 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const templateSlug = agentData.templateSlug || "custom"
     const timestamp = new Date().toISOString()
 
-    // Step 2: Use direct SQL to create the agent
-    // This ensures we're using the exact format expected by the database
-    const { data: result, error: sqlError } = await supabase.rpc("create_agent_with_profile", {
-      p_name: agentName,
-      p_goal: agentGoal,
-      p_behavior: agentBehavior,
-      p_template_slug: templateSlug,
-      p_status: "active",
-      p_created_at: timestamp,
-      p_updated_at: timestamp,
-    })
+    // Step 2: First ensure we have a valid profile to use
+    let profileId = DEFAULT_USER_ID
 
-    if (sqlError) {
-      console.error(`❌ [DEBUG] SQL error creating agent:`, sqlError)
+    // Try to get or create the default profile
+    const { data: existingProfile, error: profileCheckError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", DEFAULT_USER_ID)
+      .single()
+
+    if (!existingProfile) {
+      console.log(`📝 [DEBUG] Creating default profile...`)
+
+      // Create the default profile
+      const { data: newProfile, error: profileCreateError } = await supabase
+        .from("profiles")
+        .insert({
+          id: DEFAULT_USER_ID,
+          display_name: DEFAULT_USER_DISPLAY_NAME,
+          updated_at: timestamp,
+          created_at: timestamp,
+        })
+        .select("id")
+        .single()
+
+      if (profileCreateError) {
+        console.error(`❌ [DEBUG] Failed to create default profile:`, profileCreateError)
+
+        // Fallback: Try to use the original user's profile if it exists
+        const { data: userProfile } = await supabase.from("profiles").select("id").eq("id", originalUserId).single()
+
+        if (userProfile) {
+          console.log(`✅ [DEBUG] Using original user's profile: ${originalUserId}`)
+          profileId = originalUserId
+        } else {
+          return {
+            success: false,
+            error: `Failed to create or find a valid profile. Profile error: ${profileCreateError.message}`,
+          }
+        }
+      } else {
+        console.log(`✅ [DEBUG] Default profile created successfully`)
+        profileId = DEFAULT_USER_ID
+      }
+    } else {
+      console.log(`✅ [DEBUG] Default profile already exists`)
+      profileId = DEFAULT_USER_ID
+    }
+
+    // Step 3: Create the agent directly with the validated profile ID
+    const agentId = crypto.randomUUID()
+
+    const { data: agent, error: agentError } = await supabase
+      .from("agents")
+      .insert({
+        id: agentId,
+        name: agentName,
+        goal: agentGoal,
+        behavior: agentBehavior,
+        owner_id: profileId,
+        template_slug: templateSlug,
+        status: "active",
+        created_at: timestamp,
+        updated_at: timestamp,
+      })
+      .select("id")
+      .single()
+
+    if (agentError) {
+      console.error(`❌ [DEBUG] Error creating agent:`, agentError)
       return {
         success: false,
-        error: `Database error: ${sqlError.message}`,
+        error: `Failed to create agent: ${agentError.message}`,
       }
     }
 
-    if (!result || !result.agent_id) {
-      console.error(`❌ [DEBUG] No agent ID returned from SQL function`)
-      return {
-        success: false,
-        error: "Failed to create agent - no ID returned",
-      }
-    }
-
-    const agentId = result.agent_id
     console.log(`✅ [DEBUG] Agent created successfully with ID: ${agentId}`)
 
-    // Step 3: Store conversation data
+    // Step 4: Store conversation data
     try {
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agentId,
+        owner_id: profileId,
+        agent_name: agentName,
+        agent_goal: agentGoal,
+        agent_behavior: agentBehavior,
+        template_slug: templateSlug,
         custom_data: {
           ...agentData,
           created_via: "real_openai_conversation",
@@ -453,7 +502,8 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
           key_tasks: agentData.key_tasks || [],
         },
         configuration_method: "real_ai_chat",
-        created_at: new Date().toISOString(),
+        created_at: timestamp,
+        updated_at: timestamp,
       })
 
       if (customDataError) {
@@ -465,7 +515,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       console.warn(`⚠️ [DEBUG] Warning: Error storing conversation data:`, customDataError)
     }
 
-    // Step 4: Start the agent with intelligent orchestration
+    // Step 5: Start the agent with intelligent orchestration
     try {
       console.log(`🚀 [DEBUG] Starting agent orchestration...`)
 
@@ -473,7 +523,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         agentId: agentId,
         agentName: agentName,
         agentGoal: agentGoal,
-        userId: DEFAULT_USER_ID,
+        userId: profileId,
       })
 
       console.log(`✅ [DEBUG] Agent orchestration started successfully`)
@@ -482,7 +532,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       // Don't fail the whole operation for this
     }
 
-    // Step 5: Revalidate paths
+    // Step 6: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
     revalidatePath(`/dashboard/agents/${agentId}`)
