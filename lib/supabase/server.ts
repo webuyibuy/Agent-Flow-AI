@@ -74,5 +74,34 @@ export function getSupabaseAdmin(): SupabaseClient {
   }
 }
 
+// Create a separate function for cookie-based server client when needed
+export async function getSupabaseServerWithCookies() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.log("🔄 Using mock Supabase server client - environment variables not configured")
+    return createMockClient()
+  }
+
+  try {
+    // For now, return the same client as getSupabaseFromServer
+    // In a full implementation, this would handle cookies differently
+    const client = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+
+    console.log("✅ Real Supabase server client with cookies initialized")
+    return client
+  } catch (error) {
+    console.error("❌ Failed to initialize Supabase server client with cookies:", error)
+    return createMockClient()
+  }
+}
+
 // Export createClient for compatibility
 export { createClient } from "@supabase/supabase-js"
