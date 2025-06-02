@@ -1,23 +1,37 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { ConnectionManager } from "./connection-manager"
+
+// Mock client for development/testing
+function createMockClient(): SupabaseClient {
+  return {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
+      signUp: async () => ({ data: { user: null, session: null }, error: null }),
+      signOut: async () => ({ error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    },
+    from: () => ({
+      select: () => ({ data: [], error: null }),
+      insert: () => ({ data: [], error: null }),
+      update: () => ({ data: [], error: null }),
+      delete: () => ({ data: [], error: null }),
+    }),
+  } as any
+}
 
 export function getSupabaseFromServer() {
-  const connectionManager = ConnectionManager.getInstance()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
-  if (!connectionManager.isConfigured()) {
-    console.log("🔄 Using mock Supabase server client - environment not configured")
-    return connectionManager.getMockClient()
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.log("🔄 Using mock Supabase server client - environment variables not configured")
+    return createMockClient()
   }
 
   try {
-    const config = connectionManager.getConfig()
-
-    // For server-side usage, we'll use the admin client approach
-    // This avoids the cookies dependency that causes build issues
-    const client = createClient(config.url, config.anonKey, {
+    const client = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -29,44 +43,22 @@ export function getSupabaseFromServer() {
     return client
   } catch (error) {
     console.error("❌ Failed to initialize Supabase server client:", error)
-    return connectionManager.getMockClient()
-  }
-}
-
-// Create a separate function for cookie-based server client when needed
-export async function getSupabaseServerWithCookies() {
-  const connectionManager = ConnectionManager.getInstance()
-
-  if (!connectionManager.isConfigured()) {
-    console.log("🔄 Using mock Supabase server client - environment not configured")
-    return connectionManager.getMockClient()
-  }
-
-  try {
-    // Use createServerComponentClient instead
-    const client = createServerComponentClient({ cookies })
-
-    console.log("✅ Real Supabase server client with cookies initialized")
-    return client
-  } catch (error) {
-    console.error("❌ Failed to initialize Supabase server client with cookies:", error)
-    return connectionManager.getMockClient()
+    return createMockClient()
   }
 }
 
 export function getSupabaseAdmin(): SupabaseClient {
-  const connectionManager = ConnectionManager.getInstance()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!connectionManager.isAdminConfigured()) {
+  if (!supabaseUrl || !serviceRoleKey) {
     console.log("🔄 Using mock Supabase admin client - service role not configured")
-    return connectionManager.getMockClient()
+    return createMockClient()
   }
 
   try {
-    const config = connectionManager.getConfig()
-
     // Create admin client with service role key (bypasses RLS)
-    const adminClient = createClient(config.url, config.serviceRoleKey!, {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -78,7 +70,7 @@ export function getSupabaseAdmin(): SupabaseClient {
     return adminClient
   } catch (error) {
     console.error("❌ Failed to initialize Supabase admin client:", error)
-    return connectionManager.getMockClient()
+    return createMockClient()
   }
 }
 
