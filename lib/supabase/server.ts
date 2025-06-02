@@ -83,3 +83,6 @@ export function getSupabaseAdmin(): SupabaseClient {
     return connectionManager.getMockClient()
   }
 }
+
+// Export createClient for compatibility
+export { createClient } from "@supabase/supabase-js"
