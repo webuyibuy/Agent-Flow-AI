@@ -12,24 +12,18 @@ import {
   AlertTriangle,
   Zap,
 } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { completeTaskAndMoveToHistory } from "@/app/dashboard/dependencies/actions"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { motion } from "framer-motion"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 import { useActionState } from "@/hooks/useActionState" // Import useActionState hook
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: { created?: string }
-}) {
+export default function DashboardPage() {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error" | "unauthenticated">(
@@ -172,8 +166,6 @@ export default async function DashboardPage({
     }
   }, [completionState])
 
-  const isNewlyCreated = searchParams?.created === "true"
-
   // Loading state
   if (loading && connectionStatus === "checking") {
     return (
@@ -216,36 +208,6 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
-      {/* Success message for new agent */}
-      {isNewlyCreated && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <Alert className="bg-green-50 border-green-200 text-green-800">
-            <CheckCircleIcon className="h-5 w-5" />
-            <AlertTitle className="font-medium">🎉 Agent Created Successfully!</AlertTitle>
-            <AlertDescription>
-              Your agent is now analyzing your goal and starting to work. You'll see its thinking process below.
-            </AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
-
-      {/* Task completion feedback */}
-      {completionState?.message && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <Alert
-            className={
-              completionState.success
-                ? "bg-green-50 border-green-200 text-green-700"
-                : "bg-red-50 border-red-200 text-red-700"
-            }
-          >
-            <CheckCircleIcon className="h-5 w-5" />
-            <AlertTitle>{completionState.success ? "Task Completed!" : "Error"}</AlertTitle>
-            <AlertDescription>{completionState.message}</AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
-
       {/* Header */}
       <div className="space-y-6 sm:space-y-8">
         <div className="px-1">
@@ -432,6 +394,26 @@ export default async function DashboardPage({
           ))}
         </div>
       )}
+
+      {/* Mock Data Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Mock Data</h2>
+        <ul className="list-disc list-inside">
+          <li>Agent 1: Active</li>
+          <li>Agent 2: Inactive</li>
+          <li>Agent 3: Processing</li>
+        </ul>
+      </div>
+
+      {/* Back to Home Link */}
+      <div className="text-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+        >
+          Back to Home
+        </Link>
+      </div>
     </div>
   )
 }

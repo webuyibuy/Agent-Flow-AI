@@ -1,12 +1,4 @@
 import type React from "react"
-import type { Metadata } from "next"
-
-export const metadata: Metadata = {
-  title: "AgentFlow",
-  description: "AI-powered agent management platform",
-    generator: 'v0.dev'
-}
-
 export default function RootLayout({
   children,
 }: {
@@ -21,3 +13,7 @@ export default function RootLayout({
 
 
 import './globals.css'
+
+export const metadata = {
+      generator: 'v0.dev'
+    };

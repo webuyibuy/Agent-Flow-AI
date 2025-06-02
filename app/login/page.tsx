@@ -67,6 +67,9 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+        <a href="/" className="mt-4 text-sm text-blue-600 hover:text-blue-700">
+          Back to Home
+        </a>
       </div>
     </div>
   )
