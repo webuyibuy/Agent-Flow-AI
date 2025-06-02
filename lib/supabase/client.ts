@@ -1,10 +1,22 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import type { SupabaseClient } from "@supabase/supabase-js"
+// Mock Supabase client implementation (no external dependencies)
+export interface MockSupabaseClient {
+  auth: {
+    getSession: () => Promise<{ data: { session: null }; error: null }>
+    getUser: () => Promise<{ data: { user: null }; error: null }>
+    signInWithPassword: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
+    signUp: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
+    signOut: () => Promise<{ error: null }>
+    onAuthStateChange: (callback: any) => { data: { subscription: { unsubscribe: () => void } } }
+  }
+  from: (table: string) => {
+    select: (columns?: string) => Promise<{ data: any[]; error: null }>
+    insert: (data: any) => Promise<{ data: any[]; error: null }>
+    update: (data: any) => Promise<{ data: any[]; error: null }>
+    delete: () => Promise<{ data: any[]; error: null }>
+  }
+}
 
-let supabaseClient: SupabaseClient | null = null
-
-// Mock client for development/testing
-function createMockClient(): SupabaseClient {
+function createMockClient(): MockSupabaseClient {
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
@@ -15,50 +27,26 @@ function createMockClient(): SupabaseClient {
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
     from: () => ({
-      select: () => ({ data: [], error: null }),
-      insert: () => ({ data: [], error: null }),
-      update: () => ({ data: [], error: null }),
-      delete: () => ({ data: [], error: null }),
+      select: async () => ({ data: [], error: null }),
+      insert: async () => ({ data: [], error: null }),
+      update: async () => ({ data: [], error: null }),
+      delete: async () => ({ data: [], error: null }),
     }),
-  } as any
-}
-
-export function getSupabaseBrowserClient(): SupabaseClient {
-  // Return existing client if available
-  if (supabaseClient) {
-    return supabaseClient
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.log("🔄 Using mock Supabase client - environment variables not configured")
-    supabaseClient = createMockClient()
-    return supabaseClient
-  }
-
-  try {
-    supabaseClient = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    })
-
-    console.log("✅ Real Supabase browser client initialized")
-    return supabaseClient
-  } catch (error) {
-    console.error("❌ Failed to initialize Supabase browser client:", error)
-    supabaseClient = createMockClient()
-    return supabaseClient
   }
 }
 
-// Reset client function for testing or when switching environments
+let mockClient: MockSupabaseClient | null = null
+
+export function getSupabaseBrowserClient(): MockSupabaseClient {
+  if (!mockClient) {
+    mockClient = createMockClient()
+    console.log("🔄 Using mock Supabase browser client")
+  }
+  return mockClient
+}
+
 export function resetSupabaseClient() {
-  supabaseClient = null
+  mockClient = null
 }
 
 // Named export for createClient (required by other parts of the codebase)

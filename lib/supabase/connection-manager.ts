@@ -1,8 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
-
+// Mock connection manager (no external dependencies)
 export class ConnectionManager {
   private static instance: ConnectionManager
-  private mockClient: SupabaseClient | null = null
 
   private constructor() {}
 
@@ -14,28 +12,23 @@ export class ConnectionManager {
   }
 
   public isConfigured(): boolean {
-    return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    return false // Always return false for mock implementation
   }
 
   public isAdminConfigured(): boolean {
-    return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+    return false // Always return false for mock implementation
   }
 
   public getConfig() {
     return {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || null,
+      url: "",
+      anonKey: "",
+      serviceRoleKey: null,
     }
   }
 
-  public getMockClient(): SupabaseClient {
-    if (this.mockClient) {
-      return this.mockClient
-    }
-
-    // Create a mock client for development/testing
-    this.mockClient = {
+  public getMockClient() {
+    return {
       auth: {
         getSession: async () => ({ data: { session: null }, error: null }),
         getUser: async () => ({ data: { user: null }, error: null }),
@@ -45,13 +38,11 @@ export class ConnectionManager {
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       },
       from: () => ({
-        select: () => ({ data: [], error: null }),
-        insert: () => ({ data: [], error: null }),
-        update: () => ({ data: [], error: null }),
-        delete: () => ({ data: [], error: null }),
+        select: async () => ({ data: [], error: null }),
+        insert: async () => ({ data: [], error: null }),
+        update: async () => ({ data: [], error: null }),
+        delete: async () => ({ data: [], error: null }),
       }),
-    } as any
-
-    return this.mockClient
+    }
   }
 }

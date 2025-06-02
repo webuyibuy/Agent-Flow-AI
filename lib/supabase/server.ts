@@ -1,8 +1,22 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import type { SupabaseClient } from "@supabase/supabase-js"
+// Mock Supabase server implementation (no external dependencies)
+export interface MockSupabaseClient {
+  auth: {
+    getSession: () => Promise<{ data: { session: null }; error: null }>
+    getUser: () => Promise<{ data: { user: null }; error: null }>
+    signInWithPassword: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
+    signUp: (credentials: any) => Promise<{ data: { user: null; session: null }; error: null }>
+    signOut: () => Promise<{ error: null }>
+    onAuthStateChange: (callback: any) => { data: { subscription: { unsubscribe: () => void } } }
+  }
+  from: (table: string) => {
+    select: (columns?: string) => Promise<{ data: any[]; error: null }>
+    insert: (data: any) => Promise<{ data: any[]; error: null }>
+    update: (data: any) => Promise<{ data: any[]; error: null }>
+    delete: () => Promise<{ data: any[]; error: null }>
+  }
+}
 
-// Mock client for development/testing
-function createMockClient(): SupabaseClient {
+function createMockClient(): MockSupabaseClient {
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
@@ -13,95 +27,28 @@ function createMockClient(): SupabaseClient {
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
     from: () => ({
-      select: () => ({ data: [], error: null }),
-      insert: () => ({ data: [], error: null }),
-      update: () => ({ data: [], error: null }),
-      delete: () => ({ data: [], error: null }),
+      select: async () => ({ data: [], error: null }),
+      insert: async () => ({ data: [], error: null }),
+      update: async () => ({ data: [], error: null }),
+      delete: async () => ({ data: [], error: null }),
     }),
-  } as any
-}
-
-export function getSupabaseFromServer() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.log("🔄 Using mock Supabase server client - environment variables not configured")
-    return createMockClient()
-  }
-
-  try {
-    const client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    })
-
-    console.log("✅ Real Supabase server client initialized")
-    return client
-  } catch (error) {
-    console.error("❌ Failed to initialize Supabase server client:", error)
-    return createMockClient()
   }
 }
 
-export function getSupabaseAdmin(): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.log("🔄 Using mock Supabase admin client - service role not configured")
-    return createMockClient()
-  }
-
-  try {
-    // Create admin client with service role key (bypasses RLS)
-    const adminClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    })
-
-    console.log("✅ Real Supabase admin client initialized with service role")
-    return adminClient
-  } catch (error) {
-    console.error("❌ Failed to initialize Supabase admin client:", error)
-    return createMockClient()
-  }
+export function getSupabaseFromServer(): MockSupabaseClient {
+  console.log("🔄 Using mock Supabase server client")
+  return createMockClient()
 }
 
-// Create a separate function for cookie-based server client when needed
-export async function getSupabaseServerWithCookies() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+export function getSupabaseAdmin(): MockSupabaseClient {
+  console.log("🔄 Using mock Supabase admin client")
+  return createMockClient()
+}
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.log("🔄 Using mock Supabase server client - environment variables not configured")
-    return createMockClient()
-  }
-
-  try {
-    // For now, return the same client as getSupabaseFromServer
-    // In a full implementation, this would handle cookies differently
-    const client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    })
-
-    console.log("✅ Real Supabase server client with cookies initialized")
-    return client
-  } catch (error) {
-    console.error("❌ Failed to initialize Supabase server client with cookies:", error)
-    return createMockClient()
-  }
+export async function getSupabaseServerWithCookies(): Promise<MockSupabaseClient> {
+  console.log("🔄 Using mock Supabase server client with cookies")
+  return createMockClient()
 }
 
 // Export createClient for compatibility
-export const createClient = createSupabaseClient
+export const createClient = createMockClient
