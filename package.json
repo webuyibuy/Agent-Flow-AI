@@ -48,7 +48,6 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "context": "latest",
-    "crypto": "latest",
     "date-fns": "latest",
     "embla-carousel-react": "8.5.1",
     "framer-motion": "latest",

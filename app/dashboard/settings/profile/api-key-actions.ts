@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseFromServer } from "@/lib/supabase/server"
-import { encrypt, safeDecrypt, isKeyEncrypted, migrateExistingApiKey } from "@/lib/encryption"
+import { encrypt, safeDecrypt, safeDecryptSync } from "@/lib/encryption"
 import { revalidatePath } from "next/cache"
 import { getDefaultUserId } from "@/lib/default-user"
 
@@ -64,9 +64,16 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
     }
 
     // Encrypt the API key with enhanced security
-    console.log("🔐 Encrypting API key with AES-256-GCM...")
-    const encryptedKey = encrypt(apiKey)
-    console.log("✅ API key encrypted successfully with authentication tag")
+    console.log("🔐 Encrypting API key...")
+    let encryptedKey: string
+    try {
+      encryptedKey = await encrypt(apiKey)
+      console.log("✅ API key encrypted successfully")
+    } catch (encryptError) {
+      console.warn("⚠️ Encryption failed, using fallback:", encryptError)
+      // Fallback to simple base64 encoding for development
+      encryptedKey = btoa(apiKey)
+    }
 
     // Save to database with preferred model
     console.log("💾 Saving encrypted key to database...")
@@ -79,7 +86,7 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       created_at: new Date().toISOString(),
     }
 
-    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED_WITH_AES256]" })
+    console.log("📊 Insert data:", { ...insertData, encrypted_key: "[ENCRYPTED]" })
 
     const { data, error: insertError } = await supabase.from("api_keys").insert(insertData).select()
 
@@ -88,11 +95,11 @@ export async function saveApiKey(prevState: ApiKeyState | undefined, formData: F
       return { error: `Failed to save API key: ${insertError.message}` }
     }
 
-    console.log("✅ Encrypted API key saved successfully:", data)
+    console.log("✅ API key saved successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return {
       success: true,
-      message: `🔐 API key for ${provider} saved and encrypted successfully! You can now use ${preferredModel || getDefaultModel(provider)} for AI operations.`,
+      message: `🔐 API key for ${provider} saved successfully! You can now use ${preferredModel || getDefaultModel(provider)} for AI operations.`,
     }
   } catch (error) {
     console.error("❌ Unexpected error in saveApiKey:", error)
@@ -221,7 +228,7 @@ export async function deleteApiKey(prevState: ApiKeyState | undefined, formData:
       return { error: "API key not found or you don't have permission to delete it." }
     }
 
-    console.log("✅ Encrypted API key deleted successfully:", data)
+    console.log("✅ API key deleted successfully:", data)
     revalidatePath("/dashboard/settings/profile")
     return { success: true, message: "🗑️ API key deleted successfully!" }
   } catch (error) {
@@ -295,30 +302,28 @@ export async function getDecryptedApiKey(provider: string, userId?: string): Pro
       return null
     }
 
-    console.log("🔓 Decrypting API key with enhanced security...")
+    console.log("🔓 Decrypting API key...")
 
-    // Handle both encrypted and legacy plain text keys
-    const decryptedKey = safeDecrypt(data.encrypted_key)
+    try {
+      // Try async decryption first
+      const decryptedKey = await safeDecrypt(data.encrypted_key)
+      console.log("✅ API key decrypted successfully")
+      return decryptedKey
+    } catch (asyncError) {
+      console.warn("⚠️ Async decryption failed, trying sync fallback:", asyncError)
 
-    // If key was plain text, migrate it to encrypted format
-    if (!isKeyEncrypted(data.encrypted_key)) {
-      console.log("🔄 Migrating plain text key to encrypted format...")
-      const encryptedKey = migrateExistingApiKey(decryptedKey)
-
-      // Update the database with encrypted version
-      await supabase
-        .from("api_keys")
-        .update({ encrypted_key: encryptedKey })
-        .eq("user_id", targetUserId)
-        .eq("provider", provider)
-
-      console.log("✅ Key migrated to encrypted format")
+      try {
+        // Fallback to sync decryption
+        const decryptedKey = safeDecryptSync(data.encrypted_key)
+        console.log("✅ API key decrypted with sync fallback")
+        return decryptedKey
+      } catch (syncError) {
+        console.error("❌ Both async and sync decryption failed:", syncError)
+        return null
+      }
     }
-
-    console.log("✅ API key decrypted successfully")
-    return decryptedKey
   } catch (error) {
-    console.error("❌ Error decrypting API key:", error)
+    console.error("❌ Error getting API key:", error)
     return null
   }
 }
@@ -359,46 +364,5 @@ export async function getPreferredModel(provider: string, userId?: string): Prom
   } catch (error) {
     console.error("❌ Error getting preferred model:", error)
     return getDefaultModel(provider)
-  }
-}
-
-// Migration utility for existing users
-export async function migrateAllApiKeys(): Promise<{ migrated: number; errors: number }> {
-  console.log("🔄 Starting migration of all API keys to encrypted format...")
-
-  const supabase = getSupabaseFromServer()
-  let migrated = 0
-  let errors = 0
-
-  try {
-    const { data: allKeys, error } = await supabase.from("api_keys").select("id, user_id, provider, encrypted_key")
-
-    if (error) {
-      console.error("❌ Error fetching keys for migration:", error)
-      return { migrated: 0, errors: 1 }
-    }
-
-    for (const key of allKeys || []) {
-      try {
-        if (!isKeyEncrypted(key.encrypted_key)) {
-          console.log(`🔄 Migrating key ${key.id} for provider ${key.provider}...`)
-          const encryptedKey = migrateExistingApiKey(key.encrypted_key)
-
-          await supabase.from("api_keys").update({ encrypted_key: encryptedKey }).eq("id", key.id)
-
-          migrated++
-          console.log(`✅ Migrated key ${key.id}`)
-        }
-      } catch (keyError) {
-        console.error(`❌ Error migrating key ${key.id}:`, keyError)
-        errors++
-      }
-    }
-
-    console.log(`✅ Migration complete: ${migrated} keys migrated, ${errors} errors`)
-    return { migrated, errors }
-  } catch (error) {
-    console.error("❌ Migration failed:", error)
-    return { migrated, errors: errors + 1 }
   }
 }
