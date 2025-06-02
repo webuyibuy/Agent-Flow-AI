@@ -24,6 +24,7 @@ import NotificationCenter from "@/components/notification-center"
 import { motion } from "framer-motion"
 import { ProfileUpdater } from "./profile-updater"
 import AdvancedSearch from "@/components/advanced-search"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface NavItem {
   href: string
@@ -78,18 +79,18 @@ export default function DashboardLayoutClient({
   }, [])
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f2f2f7] dark:bg-[#1c1c1e]">
+    <div className="flex min-h-screen w-full bg-background theme-transition">
       <ProfileUpdater />
       {/* Desktop Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#e5e5ea] bg-white/80 backdrop-blur-xl dark:border-[#3a3a3c] dark:bg-[#2c2c2e]/80 sm:flex">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-border bg-card/80 backdrop-blur-xl sm:flex theme-transition">
         <nav className="flex flex-col gap-1 p-4">
           <Link
             href="/dashboard"
-            className="mb-8 flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]"
+            className="mb-8 flex items-center gap-2 text-xl font-semibold text-primary theme-transition"
             prefetch={false}
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
-              <ZapIcon className="h-6 w-6 text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-lg">
+              <ZapIcon className="h-6 w-6 text-primary-foreground" />
             </div>
             <span>AgentFlow</span>
           </Link>
@@ -98,22 +99,22 @@ export default function DashboardLayoutClient({
             <Button
               key={item.label}
               variant="ghost"
-              className="w-full justify-start text-[#1c1c1e] dark:text-white"
+              className="w-full justify-start text-foreground hover:bg-accent hover:text-accent-foreground theme-transition"
               asChild
             >
               <Link href={item.href} prefetch={false} className="flex items-center gap-3 py-3">
                 <item.icon className="h-5 w-5" />
                 {item.label}
-                <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
+                <ChevronRightIcon className="ml-auto h-4 w-4 text-muted-foreground" />
               </Link>
             </Button>
           ))}
         </nav>
 
         <div className="mt-auto p-4 space-y-3">
-          {/* Template-based creation button - Green */}
+          {/* Template-based creation button - Success color */}
           <Link href="/onboarding/templates" className="block">
-            <div className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
+            <div className="w-full bg-success hover:bg-success/90 text-success-foreground font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer theme-transition">
               <div className="flex items-center justify-center gap-3">
                 <LayoutTemplateIcon className="h-5 w-5" />
                 Use Template
@@ -121,9 +122,9 @@ export default function DashboardLayoutClient({
             </div>
           </Link>
 
-          {/* Custom agent creation button - Blue */}
+          {/* Custom agent creation button - Primary color */}
           <Link href="/dashboard/agents/new" className="block">
-            <div className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer">
+            <div className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg shadow-sm transition-all duration-200 p-3 cursor-pointer theme-transition">
               <div className="flex items-center justify-center gap-3">
                 <PlusCircleIcon className="h-5 w-5" />
                 New Agent
@@ -133,14 +134,14 @@ export default function DashboardLayoutClient({
         </div>
 
         {/* User profile section */}
-        <div className="border-t border-[#e5e5ea] p-4 dark:border-[#3a3a3c]">
+        <div className="border-t border-border p-4 theme-transition">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0071e3] text-white font-medium">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate text-[#1c1c1e] dark:text-white">{displayName}</p>
-              <p className="text-xs text-[#8e8e93] dark:text-[#aeaeb2] truncate">{userEmail}</p>
+              <p className="font-medium truncate text-foreground">{displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
             </div>
           </div>
         </div>
@@ -149,10 +150,8 @@ export default function DashboardLayoutClient({
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-64 w-full">
         {/* Header */}
         <motion.header
-          className={`sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 transition-all duration-200 ${
-            scrolled
-              ? "bg-white/80 backdrop-blur-xl border-b border-[#e5e5ea] dark:bg-[#1c1c1e]/80 dark:border-[#3a3a3c]"
-              : "bg-transparent"
+          className={`sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 transition-all duration-200 theme-transition ${
+            scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border shadow-sm" : "bg-transparent"
           }`}
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -168,32 +167,32 @@ export default function DashboardLayoutClient({
             </SheetTrigger>
             <SheetContent
               side="left"
-              className="sm:hidden w-80 p-0 flex flex-col border-r-0 bg-white/95 backdrop-blur-xl dark:bg-[#1c1c1e]/95"
+              className="sm:hidden w-80 p-0 flex flex-col border-r-0 bg-background/95 backdrop-blur-xl theme-transition"
             >
-              <SheetHeader className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
-                <SheetTitle className="flex items-center gap-2 text-xl font-semibold text-[#0071e3] dark:text-[#0091ff]">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0091ff] to-[#0066cc]">
-                    <ZapIcon className="h-6 w-6 text-white" />
+              <SheetHeader className="p-4 border-b border-border">
+                <SheetTitle className="flex items-center gap-2 text-xl font-semibold text-primary">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80">
+                    <ZapIcon className="h-6 w-6 text-primary-foreground" />
                   </div>
                   <span>AgentFlow</span>
                 </SheetTitle>
               </SheetHeader>
 
               {/* User Info Section */}
-              <div className="p-6 border-b border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e]">
+              <div className="p-6 border-b border-border bg-muted/30">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0071e3] text-white text-lg font-medium">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground text-lg font-medium">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-medium text-[#1c1c1e] dark:text-white">{displayName}</p>
+                    <p className="font-medium text-foreground">{displayName}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="tinted" size="pill" className="flex items-center gap-1">
+                      <Badge variant="secondary" size="pill" className="flex items-center gap-1">
                         <StarIcon className="h-3 w-3" />
                         {totalXp} XP
                       </Badge>
                       {currentBadge && (
-                        <Badge variant="secondary" size="pill">
+                        <Badge variant="outline" size="pill">
                           {currentBadge.name}
                         </Badge>
                       )}
@@ -210,7 +209,7 @@ export default function DashboardLayoutClient({
                       <Link href={item.href} prefetch={false} className="flex items-center gap-3">
                         <item.icon className="h-5 w-5" />
                         {item.label}
-                        <ChevronRightIcon className="ml-auto h-4 w-4 text-[#8e8e93] dark:text-[#aeaeb2]" />
+                        <ChevronRightIcon className="ml-auto h-4 w-4 text-muted-foreground" />
                       </Link>
                     </Button>
                   </SheetClose>
@@ -218,7 +217,7 @@ export default function DashboardLayoutClient({
               </nav>
 
               {/* Action Buttons */}
-              <div className="p-4 border-t border-[#e5e5ea] dark:border-[#3a3a3c] bg-[#f9f9f9] dark:bg-[#2c2c2e] space-y-3">
+              <div className="p-4 border-t border-border bg-muted/30 space-y-3">
                 <SheetClose asChild>
                   <Button variant="outline" size="lg" className="w-full" asChild>
                     <Link href="/onboarding/templates" className="flex items-center gap-2">
@@ -228,7 +227,7 @@ export default function DashboardLayoutClient({
                   </Button>
                 </SheetClose>
                 <SheetClose asChild>
-                  <Button variant="filled" size="lg" className="w-full" asChild>
+                  <Button variant="default" size="lg" className="w-full" asChild>
                     <Link href="/dashboard/agents/new" className="flex items-center gap-2">
                       <PlusCircleIcon className="h-5 w-5" />
                       Create New Agent
@@ -240,19 +239,20 @@ export default function DashboardLayoutClient({
                 </div>
               </div>
               {/* Mobile Search */}
-              <div className="p-4 border-b border-[#e5e5ea] dark:border-[#3a3a3c]">
+              <div className="p-4 border-b border-border">
                 <AdvancedSearch userId={user.id} className="w-full" />
               </div>
             </SheetContent>
           </Sheet>
 
           <div className="flex-1 flex items-center justify-between">
-            {/* Desktop User Info with XP Badge */}
+            {/* Desktop User Info with Search */}
             <div className="hidden sm:flex items-center gap-4 flex-1 max-w-md">
               <AdvancedSearch userId={user.id} className="flex-1" />
             </div>
 
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <NotificationCenter />
               <RealtimeStatusIndicator />
             </div>
@@ -264,12 +264,13 @@ export default function DashboardLayoutClient({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
+            className="theme-transition"
           >
             {children}
           </motion.div>
         </main>
 
-        <footer className="w-full p-4 text-center text-xs text-[#8e8e93] dark:text-[#aeaeb2] border-t border-[#e5e5ea] dark:border-[#3a3a3c] mt-auto bg-white/80 backdrop-blur-xl dark:bg-[#2c2c2e]/80">
+        <footer className="w-full p-4 text-center text-xs text-muted-foreground border-t border-border mt-auto bg-background/80 backdrop-blur-xl theme-transition">
           AgentFlow &copy; {new Date().getFullYear()} • Designed for Apple Platforms
         </footer>
       </div>

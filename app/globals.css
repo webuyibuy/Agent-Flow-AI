@@ -2,85 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
+/* CSS Custom Properties for Theme System */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Light theme colors (default) */
+    --background: 255 255 255;
+    --foreground: 28 28 30;
+    --card: 255 255 255;
+    --card-foreground: 28 28 30;
+    --popover: 255 255 255;
+    --popover-foreground: 28 28 30;
+    --primary: 0 102 204;
+    --primary-foreground: 255 255 255;
+    --secondary: 249 249 249;
+    --secondary-foreground: 28 28 30;
+    --muted: 242 242 247;
+    --muted-foreground: 142 142 147;
+    --accent: 242 242 247;
+    --accent-foreground: 28 28 30;
+    --destructive: 220 53 69;
+    --destructive-foreground: 255 255 255;
+    --border: 229 229 234;
+    --input: 229 229 234;
+    --ring: 0 125 250;
+    --radius: 0.75rem;
+
+    /* Success colors */
+    --success: 40 167 69;
+    --success-foreground: 255 255 255;
+    --success-bg: 212 237 218;
+    --success-text: 21 87 36;
+
+    /* Warning colors */
+    --warning: 255 193 7;
+    --warning-foreground: 28 28 30;
+    --warning-bg: 255 243 205;
+    --warning-text: 133 100 4;
+
+    /* Info colors */
+    --info: 23 162 184;
+    --info-foreground: 255 255 255;
+    --info-bg: 209 236 241;
+    --info-text: 12 84 96;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Dark theme colors */
+    --background: 28 28 30;
+    --foreground: 255 255 255;
+    --card: 44 44 46;
+    --card-foreground: 255 255 255;
+    --popover: 44 44 46;
+    --popover-foreground: 255 255 255;
+    --primary: 0 145 255;
+    --primary-foreground: 255 255 255;
+    --secondary: 58 58 60;
+    --secondary-foreground: 255 255 255;
+    --muted: 58 58 60;
+    --muted-foreground: 174 174 178;
+    --accent: 58 58 60;
+    --accent-foreground: 255 255 255;
+    --destructive: 255 69 58;
+    --destructive-foreground: 255 255 255;
+    --border: 58 58 60;
+    --input: 58 58 60;
+    --ring: 90 200 250;
+
+    /* Dark theme semantic colors */
+    --success: 48 209 88;
+    --success-foreground: 255 255 255;
+    --success-bg: 58 58 60;
+    --success-text: 48 209 88;
+
+    --warning: 255 159 10;
+    --warning-foreground: 28 28 30;
+    --warning-bg: 58 58 60;
+    --warning-text: 255 159 10;
+
+    --info: 100 210 255;
+    --info-foreground: 28 28 30;
+    --info-bg: 58 58 60;
+    --info-text: 100 210 255;
   }
 }
 
@@ -88,7 +90,225 @@ body {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth transitions for theme changes */
+  html {
+    transition: color-scheme 0.3s ease;
+  }
+
+  body,
+  [data-theme] {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Enhanced scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/30;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Selection styles */
+  ::selection {
+    @apply bg-primary/20 text-primary-foreground;
+  }
+}
+
+@layer components {
+  /* Light theme optimized components */
+  .card-light {
+    @apply bg-white border border-gray-200 shadow-sm rounded-lg;
+  }
+
+  .card-elevated {
+    @apply bg-white border border-gray-200 shadow-md rounded-lg;
+  }
+
+  .glass-light {
+    @apply bg-white/80 backdrop-blur-xl border border-gray-200/50;
+  }
+
+  .glass-dark {
+    @apply bg-gray-900/80 backdrop-blur-xl border border-gray-700/50;
+  }
+
+  /* Button variants for light theme */
+  .btn-light {
+    @apply bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
+  }
+
+  .btn-primary-light {
+    @apply bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm;
+  }
+
+  /* Text variants */
+  .text-primary-light {
+    @apply text-gray-900;
+  }
+
+  .text-secondary-light {
+    @apply text-gray-600;
+  }
+
+  .text-muted-light {
+    @apply text-gray-500;
+  }
+
+  /* Status indicators */
+  .status-success {
+    @apply bg-green-100 text-green-800 border-green-200;
+  }
+
+  .status-warning {
+    @apply bg-yellow-100 text-yellow-800 border-yellow-200;
+  }
+
+  .status-error {
+    @apply bg-red-100 text-red-800 border-red-200;
+  }
+
+  .status-info {
+    @apply bg-blue-100 text-blue-800 border-blue-200;
+  }
+
+  /* Dark theme status indicators */
+  .dark .status-success {
+    @apply bg-green-900/30 text-green-400 border-green-800;
+  }
+
+  .dark .status-warning {
+    @apply bg-yellow-900/30 text-yellow-400 border-yellow-800;
+  }
+
+  .dark .status-error {
+    @apply bg-red-900/30 text-red-400 border-red-800;
+  }
+
+  .dark .status-info {
+    @apply bg-blue-900/30 text-blue-400 border-blue-800;
+  }
+}
+
+@layer utilities {
+  /* Theme-aware utilities */
+  .theme-transition {
+    @apply transition-colors duration-300 ease-in-out;
+  }
+
+  .bg-theme-card {
+    @apply bg-card border border-border;
+  }
+
+  .bg-theme-elevated {
+    @apply bg-card border border-border shadow-lg;
+  }
+
+  .text-theme-primary {
+    @apply text-foreground;
+  }
+
+  .text-theme-secondary {
+    @apply text-muted-foreground;
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    @apply bg-white text-black;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: 0 0 0;
+    --ring: 0 0 0;
+  }
+
+  .dark {
+    --border: 255 255 255;
+    --ring: 255 255 255;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

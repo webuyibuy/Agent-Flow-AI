@@ -1,6 +1,6 @@
-// Apple Design System 2025 - Color Palette
+// Apple Design System 2025 - Enhanced Color Palette with Light Theme Focus
 export const appleColors = {
-  // Primary colors
+  // Primary colors - optimized for light theme
   primary: {
     light: "#0071e3", // Apple blue
     DEFAULT: "#0066cc", // Apple blue (slightly darker)
@@ -9,40 +9,49 @@ export const appleColors = {
     active: "#005CC8", // Active state
   },
 
-  // Neutral colors
+  // Light theme optimized neutral colors
   neutral: {
-    50: "#f9f9f9", // Almost white
-    100: "#f2f2f7", // Light background
-    200: "#e5e5ea", // Light dividers
-    300: "#d1d1d6", // Medium dividers
-    400: "#c7c7cc", // Medium-dark dividers
-    500: "#aeaeb2", // Medium text
-    600: "#8e8e93", // Medium-dark text
-    700: "#636366", // Dark text
-    800: "#3a3a3c", // Very dark text
-    900: "#1c1c1e", // Almost black
+    50: "#ffffff", // Pure white
+    100: "#f9f9f9", // Almost white
+    200: "#f2f2f7", // Light background
+    300: "#e5e5ea", // Light dividers
+    400: "#d1d1d6", // Medium dividers
+    500: "#c7c7cc", // Medium-dark dividers
+    600: "#aeaeb2", // Medium text
+    700: "#8e8e93", // Medium-dark text
+    800: "#636366", // Dark text
+    900: "#3a3a3c", // Very dark text
+    950: "#1c1c1e", // Almost black
   },
 
-  // Semantic colors
+  // Semantic colors - light theme optimized
   success: {
     light: "#34c759", // Success light
-    DEFAULT: "#30b94e", // Success default
-    dark: "#2ca745", // Success dark
+    DEFAULT: "#28a745", // Success default (darker for better contrast)
+    dark: "#1e7e34", // Success dark
+    bg: "#d4edda", // Light success background
+    text: "#155724", // Dark success text
   },
   warning: {
     light: "#ff9f0a", // Warning light
-    DEFAULT: "#ff9500", // Warning default
-    dark: "#e68600", // Warning dark
+    DEFAULT: "#ffc107", // Warning default
+    dark: "#e0a800", // Warning dark
+    bg: "#fff3cd", // Light warning background
+    text: "#856404", // Dark warning text
   },
   error: {
     light: "#ff3b30", // Error light
-    DEFAULT: "#ff2d20", // Error default
-    dark: "#e62920", // Error dark
+    DEFAULT: "#dc3545", // Error default (better contrast)
+    dark: "#c82333", // Error dark
+    bg: "#f8d7da", // Light error background
+    text: "#721c24", // Dark error text
   },
   info: {
     light: "#5ac8fa", // Info light
-    DEFAULT: "#5ac8fa", // Info default
-    dark: "#4db5e6", // Info dark
+    DEFAULT: "#17a2b8", // Info default (better contrast)
+    dark: "#138496", // Info dark
+    bg: "#d1ecf1", // Light info background
+    text: "#0c5460", // Dark info text
   },
 
   // Special colors
@@ -50,24 +59,58 @@ export const appleColors = {
   accent2: "#ff2d55", // Pink accent
   accent3: "#5e5ce6", // Indigo accent
 
-  // Background colors
+  // Light theme focused background colors
   background: {
-    primary: "#ffffff", // Primary background
-    secondary: "#f2f2f7", // Secondary background
-    tertiary: "#e5e5ea", // Tertiary background
-    elevated: "#ffffff", // Elevated background
+    primary: "#ffffff", // Primary background (white)
+    secondary: "#f9f9f9", // Secondary background (very light gray)
+    tertiary: "#f2f2f7", // Tertiary background (light gray)
+    elevated: "#ffffff", // Elevated background (white with shadow)
+    card: "#ffffff", // Card background
+    muted: "#f8f9fa", // Muted background
     dark: {
       primary: "#1c1c1e", // Dark primary background
       secondary: "#2c2c2e", // Dark secondary background
       tertiary: "#3a3a3c", // Dark tertiary background
       elevated: "#2c2c2e", // Dark elevated background
+      card: "#2c2c2e", // Dark card background
+      muted: "#3a3a3c", // Dark muted background
+    },
+  },
+
+  // Text colors optimized for light theme
+  text: {
+    primary: "#1c1c1e", // Primary text (dark)
+    secondary: "#636366", // Secondary text (medium)
+    tertiary: "#8e8e93", // Tertiary text (light)
+    muted: "#aeaeb2", // Muted text
+    inverse: "#ffffff", // Inverse text (white)
+    dark: {
+      primary: "#ffffff", // Dark mode primary text
+      secondary: "#aeaeb2", // Dark mode secondary text
+      tertiary: "#8e8e93", // Dark mode tertiary text
+      muted: "#636366", // Dark mode muted text
+      inverse: "#1c1c1e", // Dark mode inverse text
+    },
+  },
+
+  // Border colors for light theme
+  border: {
+    light: "#e5e5ea", // Light border
+    DEFAULT: "#d1d1d6", // Default border
+    dark: "#c7c7cc", // Dark border
+    muted: "#f2f2f7", // Muted border
+    dark_theme: {
+      light: "#3a3a3c", // Dark theme light border
+      DEFAULT: "#48484a", // Dark theme default border
+      dark: "#636366", // Dark theme dark border
+      muted: "#2c2c2e", // Dark theme muted border
     },
   },
 
   // Special UI elements
   glass: {
-    light: "rgba(255, 255, 255, 0.72)",
-    dark: "rgba(30, 30, 30, 0.65)",
+    light: "rgba(255, 255, 255, 0.8)",
+    dark: "rgba(30, 30, 30, 0.7)",
   },
 
   // Gradient colors
@@ -75,20 +118,24 @@ export const appleColors = {
     blue: ["#0091ff", "#0066cc"],
     purple: ["#bf5af2", "#9851e0"],
     orange: ["#ff9f0a", "#ff7d0a"],
+    light: ["#ffffff", "#f9f9f9"],
+    dark: ["#2c2c2e", "#1c1c1e"],
   },
 }
 
-// Apple Typography 2025
+// Enhanced typography for better light theme readability
 export const appleTypography = {
   fontFamily: {
     sans: 'SF Pro Display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     mono: "SF Mono, SFMono-Regular, ui-monospace, monospace",
   },
   fontWeight: {
+    light: 300,
     regular: 400,
     medium: 500,
     semibold: 600,
     bold: 700,
+    heavy: 800,
   },
   fontSize: {
     xs: "0.75rem", // 12px
@@ -100,11 +147,14 @@ export const appleTypography = {
     "3xl": "1.875rem", // 30px
     "4xl": "2.25rem", // 36px
     "5xl": "3rem", // 48px
+    "6xl": "3.75rem", // 60px
   },
   lineHeight: {
     tight: 1.2,
+    snug: 1.375,
     normal: 1.5,
-    relaxed: 1.75,
+    relaxed: 1.625,
+    loose: 2,
   },
   letterSpacing: {
     tighter: "-0.05em",
@@ -112,12 +162,14 @@ export const appleTypography = {
     normal: "0",
     wide: "0.025em",
     wider: "0.05em",
+    widest: "0.1em",
   },
 }
 
-// Apple Spacing 2025
+// Enhanced spacing system
 export const appleSpacing = {
   0: "0",
+  px: "1px",
   0.5: "0.125rem", // 2px
   1: "0.25rem", // 4px
   1.5: "0.375rem", // 6px
@@ -153,7 +205,7 @@ export const appleSpacing = {
   96: "24rem", // 384px
 }
 
-// Apple Shadows 2025
+// Enhanced shadows for light theme
 export const appleShadows = {
   sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
   DEFAULT: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
@@ -162,15 +214,23 @@ export const appleShadows = {
   xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
   "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
   inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
-  // Apple-specific shadows
-  elevated: "0 8px 16px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.05)",
-  card: "0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)",
-  button: "0 1px 2px rgba(0, 0, 0, 0.08)",
-  focus: "0 0 0 4px rgba(0, 125, 250, 0.6)",
+  // Apple-specific shadows for light theme
+  elevated: "0 8px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.03)",
+  card: "0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.02)",
+  button: "0 1px 2px rgba(0, 0, 0, 0.05)",
+  focus: "0 0 0 4px rgba(0, 125, 250, 0.3)",
   none: "none",
+  // Dark theme shadows
+  dark: {
+    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.3)",
+    DEFAULT: "0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.2)",
+    md: "0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2)",
+    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)",
+    xl: "0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)",
+  },
 }
 
-// Apple Border Radius 2025
+// Enhanced border radius
 export const appleBorderRadius = {
   none: "0",
   sm: "0.25rem", // 4px
@@ -188,7 +248,7 @@ export const appleBorderRadius = {
   pill: "9999px",
 }
 
-// Apple Transitions 2025
+// Enhanced transitions
 export const appleTransitions = {
   duration: {
     75: "75ms",
@@ -210,10 +270,11 @@ export const appleTransitions = {
     // Apple-specific
     spring: "cubic-bezier(0.25, 0.1, 0.25, 1.05)",
     bounce: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+    smooth: "cubic-bezier(0.4, 0, 0.2, 1)",
   },
 }
 
-// Apple Z-Index 2025
+// Z-Index system
 export const appleZIndex = {
   0: "0",
   10: "10",
