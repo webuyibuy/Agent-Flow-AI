@@ -3,7 +3,9 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getDecryptedApiKey } from "@/app/dashboard/settings/profile/api-key-actions"
-import { DEFAULT_USER_ID, DEFAULT_USER_DISPLAY_NAME } from "@/lib/default-user"
+
+const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000000"
+const DEFAULT_USER_DISPLAY_NAME = "Default User"
 
 interface ChatRequest {
   templateSlug: string
@@ -74,9 +76,7 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
     debugInfo.apiKeyPrefix = openaiKey.substring(0, 5)
     debugInfo.apiKeyLength = openaiKey.length
 
-    // Step 2: Validate API key format - REMOVED STRICT VALIDATION
-    // OpenAI keys can have different formats, so we'll be more flexible
-    // We'll just check if it's a reasonable length
+    // Step 2: Validate API key format
     if (openaiKey.length < 10) {
       console.log(`⚠️ [DEBUG] API key seems too short (${openaiKey.length} chars)`)
       debugInfo.apiKeyValid = false
@@ -98,9 +98,6 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
     const userMessageLength = userMessage?.length || 20
     const minLength = 10
     const maxLength = 164
-
-    // Scale response length based on user message length
-    // Short user messages get shorter responses, longer messages get longer responses
     const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(userMessageLength * 1.5)))
 
     const systemPrompt = `You are a professional ${templateName} AI assistant. You are helping someone configure an AI agent like yourself.
@@ -138,31 +135,10 @@ Your role is to be helpful, friendly, and concise.`
     debugInfo.messagesCount = messages.length
     debugInfo.apiCallAttempted = true
 
-    // Step 4: Make REAL OpenAI API call
+    // Step 4: Make OpenAI API call
     const apiStartTime = Date.now()
-
-    // Try different API endpoints if needed
     const apiEndpoint = "https://api.openai.com/v1/chat/completions"
-    const model = "gpt-3.5-turbo" // Fallback to a more widely available model
-
-    // Try to determine if this is an Azure OpenAI key
-    const isAzureKey = openaiKey.includes("azure") || openaiKey.toLowerCase().startsWith("azure")
-    debugInfo.isAzureKey = isAzureKey
-
-    if (isAzureKey) {
-      console.log(`🔷 [DEBUG] Detected possible Azure OpenAI key`)
-      // We would need Azure endpoint info, but for now just note it
-      debugInfo.needsAzureEndpoint = true
-      return {
-        success: false,
-        error: "Azure OpenAI keys require additional configuration. Please use a direct OpenAI key.",
-        apiCallMade: false,
-        debugInfo,
-      }
-    }
-
-    console.log(`🔑 [DEBUG] Using API endpoint: ${apiEndpoint}`)
-    console.log(`🤖 [DEBUG] Using model: ${model}`)
+    const model = "gpt-3.5-turbo"
 
     const response = await fetch(apiEndpoint, {
       method: "POST",
@@ -191,7 +167,6 @@ Your role is to be helpful, friendly, and concise.`
       console.error(`❌ [DEBUG] OpenAI API Error:`, errorText)
       debugInfo.apiError = errorText
 
-      // Check for common error types
       if (response.status === 401) {
         return {
           success: false,
@@ -235,13 +210,6 @@ Your role is to be helpful, friendly, and concise.`
       extractedData = await extractAgentInfo(messages, openaiKey, debugInfo)
     }
 
-    // Step 7: Generate suggestions based on conversation
-    let suggestions: string[] = []
-    if (conversationCount >= 2) {
-      console.log(`💡 [DEBUG] Generating suggestions...`)
-      suggestions = await generateSuggestions(messages, templateName, userId, openaiKey, debugInfo)
-    }
-
     const updatedAgentData = { ...currentAgentData, ...extractedData }
     const shouldShowButton = conversationCount >= 4
 
@@ -251,7 +219,7 @@ Your role is to be helpful, friendly, and concise.`
       agentData: updatedAgentData,
       setupComplete: shouldShowButton,
       conversationCount: isInitial ? 0 : conversationCount + 1,
-      suggestions: suggestions,
+      suggestions: [],
       apiCallMade: true,
       debugInfo,
     }
@@ -336,199 +304,59 @@ Return valid JSON only.`
   return {}
 }
 
-async function generateSuggestions(
-  messages: Array<{ role: string; content: string }>,
-  templateName: string,
+async function ensureUserProfileExists(
   userId: string,
-  openaiKey: string,
-  debugInfo: any,
-): Promise<string[]> {
-  try {
-    console.log(`💡 [DEBUG] Making suggestion API call...`)
-
-    const suggestionPrompt = `Based on this conversation with someone setting up a ${templateName} agent, suggest 3 specific, actionable next steps they could take.
-
-Conversation:
-${messages
-  .slice(-6)
-  .map((msg) => `${msg.role}: ${msg.content}`)
-  .join("\n")}
-
-Provide 3 specific suggestions as a JSON array:
-["suggestion 1", "suggestion 2", "suggestion 3"]
-
-Make suggestions practical and based on what they've discussed.`
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "Generate practical suggestions based on conversation context. Return JSON array only.",
-          },
-          { role: "user", content: suggestionPrompt },
-        ],
-        max_tokens: 150,
-        temperature: 0.7,
-      }),
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      const jsonString = data.choices?.[0]?.message?.content || "[]"
-
-      try {
-        const suggestions = JSON.parse(jsonString)
-        console.log(`✅ [DEBUG] Suggestions:`, suggestions)
-        debugInfo.suggestionsSuccessful = true
-        return Array.isArray(suggestions) ? suggestions : []
-      } catch (parseError) {
-        console.log(`⚠️ [DEBUG] Suggestions JSON parse failed: ${jsonString}`)
-        debugInfo.suggestionsParseError = jsonString
-      }
-    } else {
-      console.log(`❌ [DEBUG] Suggestions API failed: ${response.status}`)
-      debugInfo.suggestionsApiFailed = response.status
-    }
-  } catch (error) {
-    console.error(`❌ [DEBUG] Suggestions error:`, error)
-    debugInfo.suggestionsError = error instanceof Error ? error.message : String(error)
-  }
-
-  return []
-}
-
-export async function acceptSuggestion(
-  suggestion: string,
-  userId: string,
-  currentAgentData: any,
-): Promise<{ success: boolean; message?: string; agentData?: any }> {
-  try {
-    console.log(`✅ User accepted suggestion: "${suggestion}"`)
-
-    const openaiKey = await getDecryptedApiKey("openai", userId)
-    if (!openaiKey) {
-      return { success: false, message: "OpenAI API key required" }
-    }
-
-    console.log(`🚀 Making REAL API call to process accepted suggestion...`)
-
-    // Calculate target response length based on suggestion length
-    const suggestionLength = suggestion.length
-    const minLength = 10
-    const maxLength = 164
-    const targetLength = Math.min(maxLength, Math.max(minLength, Math.floor(suggestionLength * 1.2)))
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `The user accepted a suggestion. Provide a helpful response and update their agent configuration.
-            
-IMPORTANT FORMATTING INSTRUCTIONS:
-1. Always start your response with a simple greeting and question
-2. Keep your response between ${minLength} and ${maxLength} characters
-3. Target response length: approximately ${targetLength} characters
-4. Be concise but helpful
-5. Use a conversational, friendly tone`,
-          },
-          {
-            role: "user",
-            content: `I accepted this suggestion: "${suggestion}". Please provide next steps and update my agent configuration accordingly.`,
-          },
-        ],
-        max_tokens: 200,
-        temperature: 0.8,
-      }),
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      const message = data.choices?.[0]?.message?.content || "Great choice! Let's implement that."
-
-      console.log(`✅ Processed suggestion acceptance`)
-
-      return {
-        success: true,
-        message,
-        agentData: {
-          ...currentAgentData,
-          accepted_suggestions: [...(currentAgentData.accepted_suggestions || []), suggestion],
-          last_suggestion_accepted: suggestion,
-        },
-      }
-    }
-
-    return { success: false, message: "Failed to process suggestion" }
-  } catch (error) {
-    console.error("Error accepting suggestion:", error)
-    return { success: false, message: "Error processing suggestion" }
-  }
-}
-
-async function ensureDefaultUserExists(): Promise<{ success: boolean; userId: string; error?: string }> {
+): Promise<{ success: boolean; validUserId: string; error?: string }> {
   try {
     const supabase = getSupabaseAdmin()
 
-    console.log(`👤 [DEBUG] Ensuring default user exists: ${DEFAULT_USER_ID}`)
+    console.log(`👤 [DEBUG] Ensuring user profile exists for: ${userId}`)
 
-    // First, check if default user already exists
+    // Always use the default user to avoid foreign key issues
+    const targetUserId = DEFAULT_USER_ID
+
+    // Check if default user exists
     const { data: existingProfile, error: checkError } = await supabase
       .from("profiles")
       .select("id, display_name")
-      .eq("id", DEFAULT_USER_ID)
+      .eq("id", targetUserId)
       .single()
 
     if (existingProfile) {
-      console.log(`✅ [DEBUG] Default user already exists: ${existingProfile.display_name}`)
-      return { success: true, userId: DEFAULT_USER_ID }
+      console.log(`✅ [DEBUG] Default user exists: ${existingProfile.display_name}`)
+      return { success: true, validUserId: targetUserId }
     }
 
     if (checkError && checkError.code !== "PGRST116") {
-      // PGRST116 = no rows returned
-      console.error(`❌ [DEBUG] Error checking default user:`, checkError)
-      return { success: false, userId: DEFAULT_USER_ID, error: `Error checking default user: ${checkError.message}` }
+      console.error(`❌ [DEBUG] Error checking profile:`, checkError)
+      return { success: false, validUserId: targetUserId, error: `Error checking profile: ${checkError.message}` }
     }
 
-    // Default user doesn't exist, create it
-    console.log(`🔨 [DEBUG] Creating default user: ${DEFAULT_USER_ID}`)
+    // Create default user if it doesn't exist
+    console.log(`🔨 [DEBUG] Creating default user: ${targetUserId}`)
 
     const { data: newProfile, error: createError } = await supabase
       .from("profiles")
       .insert({
-        id: DEFAULT_USER_ID,
+        id: targetUserId,
         display_name: DEFAULT_USER_DISPLAY_NAME,
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .select("id, display_name")
       .single()
 
     if (createError) {
-      console.error(`❌ [DEBUG] Error creating default user:`, createError)
-      return { success: false, userId: DEFAULT_USER_ID, error: `Error creating default user: ${createError.message}` }
+      console.error(`❌ [DEBUG] Error creating profile:`, createError)
+      return { success: false, validUserId: targetUserId, error: `Error creating profile: ${createError.message}` }
     }
 
     console.log(`✅ [DEBUG] Created default user: ${newProfile.display_name}`)
-    return { success: true, userId: DEFAULT_USER_ID }
+    return { success: true, validUserId: targetUserId }
   } catch (error) {
-    console.error(`💥 [DEBUG] Unexpected error in ensureDefaultUserExists:`, error)
+    console.error(`💥 [DEBUG] Unexpected error in ensureUserProfileExists:`, error)
     return {
       success: false,
-      userId: DEFAULT_USER_ID,
+      validUserId: DEFAULT_USER_ID,
       error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
     }
   }
@@ -546,46 +374,29 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     console.log(`🎯 [DEBUG] Creating agent with data:`, agentData)
     console.log(`👤 [DEBUG] Original User ID: ${originalUserId}`)
 
-    // Step 1: Always use the default user to avoid foreign key issues
-    const defaultUserResult = await ensureDefaultUserExists()
-    if (!defaultUserResult.success) {
-      console.error(`❌ [DEBUG] Failed to ensure default user exists:`, defaultUserResult.error)
+    // Step 1: Ensure user profile exists and get valid user ID
+    const userResult = await ensureUserProfileExists(originalUserId)
+    if (!userResult.success) {
+      console.error(`❌ [DEBUG] Failed to ensure user exists:`, userResult.error)
       return {
         success: false,
-        error: `Default user setup failed: ${defaultUserResult.error}`,
+        error: `User setup failed: ${userResult.error}`,
       }
     }
 
-    const userId = defaultUserResult.userId
-    console.log(`✅ [DEBUG] Using user ID: ${userId}`)
+    const validUserId = userResult.validUserId
+    console.log(`✅ [DEBUG] Using valid user ID: ${validUserId}`)
 
-    // Step 2: Validate user exists (double-check)
-    const { data: user, error: userError } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .eq("id", userId)
-      .single()
-
-    if (userError || !user) {
-      console.error(`❌ [DEBUG] User validation failed:`, userError)
-      return {
-        success: false,
-        error: "User profile not found after creation attempt.",
-      }
-    }
-
-    console.log(`✅ [DEBUG] User validated: ${user.display_name} (${user.id})`)
-
-    // Step 3: Create agent with validated user
-    const agentName = agentData.name || `My ${agentData.templateName}`
-    const agentGoal = agentData.goal || `Help with ${agentData.templateName.toLowerCase()} tasks`
-    const agentBehavior = agentData.behavior || `Professional ${agentData.templateName} assistant`
+    // Step 2: Create agent with valid user ID
+    const agentName = agentData.name || `My ${agentData.templateName || "Agent"}`
+    const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
+    const agentBehavior = agentData.behavior || `Professional ${agentData.templateName || "AI"} assistant`
 
     console.log(`🤖 [DEBUG] Creating agent:`, {
       name: agentName,
       goal: agentGoal,
       behavior: agentBehavior,
-      owner_id: userId,
+      owner_id: validUserId,
       template_slug: agentData.templateSlug || "custom",
     })
 
@@ -595,7 +406,7 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         name: agentName,
         goal: agentGoal,
         behavior: agentBehavior,
-        owner_id: userId,
+        owner_id: validUserId,
         template_slug: agentData.templateSlug || "custom",
         status: "active",
         created_at: new Date().toISOString(),
@@ -607,14 +418,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     if (agentError) {
       console.error(`❌ [DEBUG] Error creating agent:`, agentError)
       console.error(`❌ [DEBUG] Full error details:`, JSON.stringify(agentError, null, 2))
-
-      // Check if it's a foreign key constraint error
-      if (agentError.code === "23503") {
-        return {
-          success: false,
-          error: "Database constraint error. Please try again or contact support.",
-        }
-      }
 
       return {
         success: false,
@@ -632,34 +435,35 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     console.log(`✅ [DEBUG] Agent created successfully: ${agent.name} (${agent.id})`)
 
-    // Step 4: Store conversation data (optional, non-critical)
+    // Step 3: Store conversation data (optional)
     try {
       const { error: customDataError } = await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
-        owner_id: userId,
-        custom_data: {
+        owner_id: validUserId,
+        agent_name: agentName,
+        agent_goal: agentGoal,
+        agent_behavior: agentBehavior,
+        template_slug: agentData.templateSlug || "custom",
+        configuration_method: "real_ai_chat",
+        data: {
           ...agentData,
           created_via: "real_openai_conversation",
-          conversation_insights: agentData.notes,
-          accepted_suggestions: agentData.accepted_suggestions || [],
-          original_user_id: originalUserId, // Store the original user ID for reference
+          original_user_id: originalUserId,
         },
-        configuration_method: "real_ai_chat",
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
 
       if (customDataError) {
         console.warn(`⚠️ [DEBUG] Warning: Could not store conversation data:`, customDataError)
-        // Don't fail the whole operation for this
       } else {
         console.log(`✅ [DEBUG] Conversation data stored successfully`)
       }
     } catch (customDataError) {
       console.warn(`⚠️ [DEBUG] Warning: Error storing conversation data:`, customDataError)
-      // Don't fail the whole operation for this
     }
 
-    // Step 5: Revalidate paths
+    // Step 4: Revalidate paths
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/agents")
 
