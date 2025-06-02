@@ -179,13 +179,14 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       }
     }
 
-    // Create agent with proper data
+    // Create agent with proper data - only using columns that exist in the schema
     const agentName = agentData.name || `My ${agentData.templateName}`
     const agentGoal = agentData.goal || `Help with ${agentData.templateName.toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName} assistant`
 
     console.log(`[CompleteAgentSetup] Creating agent: ${agentName}`)
 
+    // Only include fields that exist in the agents table
     const { data: agent, error: agentError } = await supabase
       .from("agents")
       .insert({
@@ -194,7 +195,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
         behavior: agentBehavior,
         owner_id: userId,
         template_slug: agentData.templateSlug || "custom",
-        template_name: agentData.templateName || "Custom Agent",
         status: "active",
         created_at: new Date().toISOString(),
       })
@@ -218,12 +218,15 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     console.log(`[CompleteAgentSetup] Agent created with ID: ${agent.id}`)
 
-    // Store additional configuration data
+    // Store all data including template_name in the custom data table
     try {
       await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
         owner_id: userId,
-        custom_data: agentData,
+        custom_data: {
+          ...agentData,
+          template_name: agentData.templateName, // Store template_name here instead
+        },
         configuration_method: "chat_setup",
         created_at: new Date().toISOString(),
       })
