@@ -6,10 +6,11 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings } from "lucide-react"
-import { generateChatResponse, completeAgentSetup } from "@/app/onboarding/agent-config/chat-actions"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings, CheckCircle, Lightbulb } from "lucide-react"
+import { generateChatResponse, completeAgentSetup, acceptSuggestion } from "@/app/onboarding/agent-config/chat-actions"
 import type { AgentTemplate } from "@/lib/agent-templates"
 import Link from "next/link"
 
@@ -17,6 +18,8 @@ interface Message {
   id: string
   role: "assistant" | "user"
   content: string
+  suggestions?: string[]
+  apiCallMade?: boolean
 }
 
 interface AgentChatSetupProps {
@@ -33,6 +36,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
   const [setupComplete, setSetupComplete] = useState(false)
   const [conversationCount, setConversationCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [apiCallsMade, setApiCallsMade] = useState(0)
   const [agentData, setAgentData] = useState<any>({
     templateSlug,
     templateName,
@@ -66,7 +70,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     setIsLoading(true)
     setError(null)
     try {
-      console.log("Starting OpenAI conversation...")
+      console.log("🚀 Starting REAL OpenAI conversation...")
       const response = await generateChatResponse({
         templateSlug,
         templateName,
@@ -80,8 +84,14 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
             id: `init-${Date.now()}`,
             role: "assistant",
             content: response.message,
+            suggestions: response.suggestions,
+            apiCallMade: response.apiCallMade,
           },
         ])
+
+        if (response.apiCallMade) {
+          setApiCallsMade((prev) => prev + 1)
+        }
 
         if (response.agentData) {
           setAgentData((prev) => ({
@@ -127,7 +137,8 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     }, 100)
 
     try {
-      console.log("Sending message to OpenAI...")
+      console.log(`🚀 Sending "${userMessage}" to REAL OpenAI API...`)
+
       // Convert messages to the format expected by the API
       const messageHistory = messages.map((msg) => ({
         role: msg.role,
@@ -157,8 +168,14 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
             id: `assistant-${Date.now()}`,
             role: "assistant",
             content: response.message,
+            suggestions: response.suggestions,
+            apiCallMade: response.apiCallMade,
           },
         ])
+
+        if (response.apiCallMade) {
+          setApiCallsMade((prev) => prev + 1)
+        }
 
         // Update agent data
         if (response.agentData) {
@@ -173,7 +190,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           setConversationCount(response.conversationCount)
         }
 
-        // Check if setup is complete (show button after 5 exchanges)
+        // Check if setup is complete
         if (response.setupComplete) {
           setSetupComplete(true)
         }
@@ -183,6 +200,46 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     } catch (error) {
       console.error("Error sending message:", error)
       setError("Failed to send message. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleAcceptSuggestion = async (suggestion: string) => {
+    setIsLoading(true)
+    try {
+      console.log(`✅ Accepting suggestion: "${suggestion}"`)
+
+      const response = await acceptSuggestion(suggestion, userId, agentData)
+
+      if (response.success && response.message) {
+        // Add acceptance message to chat
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-accept-${Date.now()}`,
+            role: "user",
+            content: `✅ I accept: "${suggestion}"`,
+          },
+          {
+            id: `assistant-accept-${Date.now()}`,
+            role: "assistant",
+            content: response.message,
+            apiCallMade: true,
+          },
+        ])
+
+        setApiCallsMade((prev) => prev + 1)
+
+        if (response.agentData) {
+          setAgentData((prev) => ({
+            ...prev,
+            ...response.agentData,
+          }))
+        }
+      }
+    } catch (error) {
+      console.error("Error accepting suggestion:", error)
     } finally {
       setIsLoading(false)
     }
@@ -199,7 +256,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     setIsLoading(true)
     setError(null)
     try {
-      console.log("Creating agent with data:", agentData)
+      console.log("🎯 Creating agent with REAL conversation data:", agentData)
 
       const result = await completeAgentSetup({
         agentData,
@@ -221,26 +278,28 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     }
   }
 
-  // Get avatar image based on template
-  const getAvatarImage = () => {
-    if (template?.icon) {
-      return `/placeholder.svg?height=48&width=48&query=${encodeURIComponent(templateName + " icon")}`
-    }
-    return `/placeholder.svg?height=48&width=48&query=${encodeURIComponent(templateName)}`
-  }
-
   return (
     <div className="flex flex-col space-y-6">
-      {/* Header */}
-      <div className="flex items-center space-x-4">
-        <img
-          src={getAvatarImage() || "/placeholder.svg"}
-          alt={templateName}
-          className="w-12 h-12 rounded-full border-2 border-gray-200"
-        />
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{templateName} Setup</h1>
-          <p className="text-gray-600 dark:text-gray-400">Real-time OpenAI conversation</p>
+      {/* Header with API Status */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <img
+            src={`/placeholder.svg?height=48&width=48&query=${encodeURIComponent(templateName)}`}
+            alt={templateName}
+            className="w-12 h-12 rounded-full border-2 border-gray-200"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{templateName} Setup</h1>
+            <p className="text-gray-600 dark:text-gray-400">Real-time OpenAI API conversation</p>
+          </div>
+        </div>
+
+        {/* API Call Counter */}
+        <div className="flex items-center space-x-2">
+          <Badge variant={apiCallsMade > 0 ? "default" : "secondary"} className="bg-green-600">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            {apiCallsMade} API calls
+          </Badge>
         </div>
       </div>
 
@@ -265,7 +324,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
       {/* Progress indicator */}
       {conversationCount > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-          <span>OpenAI conversation: {conversationCount}/5</span>
+          <span>Real conversation: {conversationCount}/5 exchanges</span>
           <div className="flex space-x-1">
             {[1, 2, 3, 4, 5].map((step) => (
               <div
@@ -279,18 +338,57 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
       {/* Chat container */}
       <Card className="flex-1 min-h-[500px] max-h-[600px] flex flex-col">
-        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 pt-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-gray-600">
+            🤖 Live OpenAI Conversation - Responds to anything you say
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 pt-2">
           {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === "assistant" ? "justify-start" : "justify-end"}`}>
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                  message.role === "assistant"
-                    ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
-                    : "bg-blue-600 text-white"
-                }`}
-              >
-                <p className="text-sm leading-relaxed">{message.content}</p>
+            <div key={message.id} className="space-y-2">
+              <div className={`flex ${message.role === "assistant" ? "justify-start" : "justify-end"}`}>
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                    message.role === "assistant"
+                      ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
+                      : "bg-blue-600 text-white"
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  {message.apiCallMade && (
+                    <div className="mt-2 text-xs opacity-70 flex items-center">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Real OpenAI API response
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Suggestions */}
+              {message.suggestions && message.suggestions.length > 0 && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] space-y-2">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center">
+                      <Lightbulb className="h-3 w-3 mr-1" />
+                      AI Suggestions based on our conversation:
+                    </div>
+                    <div className="space-y-1">
+                      {message.suggestions.map((suggestion, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          className="text-left h-auto p-2 text-xs"
+                          onClick={() => handleAcceptSuggestion(suggestion)}
+                          disabled={isLoading}
+                        >
+                          ✨ {suggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 
@@ -299,7 +397,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
               <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800">
                 <div className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-gray-500 text-sm">OpenAI is thinking...</span>
+                  <span className="text-gray-500 text-sm">Making real OpenAI API call...</span>
                 </div>
               </div>
             </div>
@@ -316,7 +414,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type your message and press Enter..."
+              placeholder="Say anything - silly, serious, random - AI will respond accurately..."
               className="flex-1"
               disabled={isLoading || !!error}
             />
@@ -332,7 +430,43 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
         </div>
       </Card>
 
-      {/* Create Agent Button - Shows after 5 exchanges */}
+      {/* Agent Data Preview */}
+      {Object.keys(agentData).length > 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">🧠 AI Extracted from Conversation</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs space-y-1">
+            {agentData.name && (
+              <div>
+                <strong>Name:</strong> {agentData.name}
+              </div>
+            )}
+            {agentData.goal && (
+              <div>
+                <strong>Goal:</strong> {agentData.goal}
+              </div>
+            )}
+            {agentData.behavior && (
+              <div>
+                <strong>Behavior:</strong> {agentData.behavior}
+              </div>
+            )}
+            {agentData.focus_area && (
+              <div>
+                <strong>Focus:</strong> {agentData.focus_area}
+              </div>
+            )}
+            {agentData.notes && (
+              <div>
+                <strong>Notes:</strong> {agentData.notes}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Create Agent Button */}
       {setupComplete && !error && (
         <Button
           onClick={handleCreateAgent}
@@ -346,7 +480,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           ) : (
             <>
               <Sparkles className="mr-2 h-5 w-5" />
-              Create Agent <ArrowRight className="ml-2 h-5 w-5" />
+              Create Agent from Real Conversation <ArrowRight className="ml-2 h-5 w-5" />
             </>
           )}
         </Button>

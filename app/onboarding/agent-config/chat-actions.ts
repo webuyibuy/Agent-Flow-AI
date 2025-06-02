@@ -2,7 +2,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { LLMService } from "@/lib/llm-service"
+import { getDecryptedApiKey } from "@/app/dashboard/settings/profile/api-key-actions"
 
 interface ChatRequest {
   templateSlug: string
@@ -21,6 +21,8 @@ interface ChatResponse {
   setupComplete?: boolean
   error?: string
   conversationCount?: number
+  suggestions?: string[]
+  apiCallMade?: boolean
 }
 
 export async function generateChatResponse(request: ChatRequest): Promise<ChatResponse> {
@@ -35,190 +37,317 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       currentAgentData = {},
     } = request
 
-    console.log(`[ChatActions] Processing request for ${templateName}, isInitial: ${isInitial}`)
+    console.log(`🚀 [REAL API] Processing ${isInitial ? "initial" : "conversation"} for ${templateName}`)
+    console.log(`📝 User message: "${userMessage}"`)
 
-    // Count conversation exchanges (user messages only)
+    // Count conversation exchanges
     const conversationCount = messageHistory.filter((msg) => msg.role === "user").length
 
-    // Check if user has OpenAI API key
-    const availableProviders = await LLMService.getAvailableProviders(userId)
-    console.log(`[ChatActions] Available providers: ${availableProviders.join(", ")}`)
+    // Get OpenAI API key directly
+    const openaiKey = await getDecryptedApiKey("openai", userId)
 
-    if (availableProviders.length === 0) {
+    if (!openaiKey) {
+      console.log("❌ No OpenAI API key found")
       return {
         success: false,
-        error: "Please add an OpenAI API key in your settings to enable intelligent conversations.",
+        error: "Please add your OpenAI API key in Settings to enable real-time AI conversations.",
+        apiCallMade: false,
       }
     }
 
-    // Generate initial greeting using pure OpenAI
+    console.log(`✅ OpenAI API key found, making REAL API call...`)
+
+    // Build conversation for OpenAI
+    const messages = []
+
+    // System prompt for intelligent conversation
+    const systemPrompt = `You are an expert ${templateName} having a REAL conversation with someone who wants to create an AI agent.
+
+IMPORTANT INSTRUCTIONS:
+1. Respond naturally and accurately to ANYTHING they say - silly, serious, random, or professional
+2. Be genuinely helpful and build on their input
+3. When you have enough context, suggest specific strategies or actions
+4. Ask follow-up questions to understand their needs better
+5. If they give you good information, build a strategy around it
+6. Be conversational but professional
+
+Current context: They're setting up a ${templateName} agent. Learn about their needs and help them configure it effectively.
+
+Respond naturally to whatever they say, even if it's random or silly. Always be helpful and engaging.`
+
+    messages.push({ role: "system", content: systemPrompt })
+
+    // Add conversation history
+    messageHistory.forEach((msg) => {
+      messages.push({ role: msg.role as "user" | "assistant", content: msg.content })
+    })
+
+    // Add current message if not initial
+    if (!isInitial && userMessage) {
+      messages.push({ role: "user", content: userMessage })
+    }
+
+    // For initial message, ask OpenAI to introduce itself
     if (isInitial) {
-      console.log(`[ChatActions] Generating OpenAI initial greeting for ${templateName}`)
+      messages.push({
+        role: "user",
+        content: `Introduce yourself as a ${templateName} and start a natural conversation to understand how you can help me set up an AI agent like you.`,
+      })
+    }
 
-      try {
-        const systemPrompt = `You are a professional ${templateName}. You are having a real conversation with someone who wants to set up an AI agent like you.
+    console.log(`📡 Making REAL OpenAI API call with ${messages.length} messages...`)
 
-Be natural, friendly, and genuinely helpful. Introduce yourself and ask one thoughtful question to understand how you can help them.
+    // Make REAL OpenAI API call
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: messages,
+        max_tokens: 300,
+        temperature: 0.9,
+      }),
+    })
 
-Do NOT use scripted responses. Be conversational and authentic.`
+    console.log(`📡 OpenAI API Response Status: ${response.status}`)
 
-        const response = await LLMService.generateText(
-          `Introduce yourself as a ${templateName} and start a natural conversation to understand how you can help them.`,
-          {
-            systemPrompt,
-            userId,
-            temperature: 0.9,
-            maxTokens: 150,
-          },
-        )
-
-        if ("error" in response) {
-          console.error(`[ChatActions] OpenAI error: ${response.error}`)
-          return {
-            success: false,
-            error: "Unable to connect to OpenAI. Please check your API key.",
-          }
-        }
-
-        console.log(`[ChatActions] OpenAI greeting generated successfully`)
-        return {
-          success: true,
-          message: response.content,
-          agentData: { templateSlug, templateName },
-          conversationCount: 0,
-        }
-      } catch (error) {
-        console.error("[ChatActions] Error generating OpenAI greeting:", error)
-        return {
-          success: false,
-          error: "Failed to generate response. Please check your OpenAI API key.",
-        }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error("❌ OpenAI API Error:", errorData)
+      return {
+        success: false,
+        error: `OpenAI API Error: ${response.status} - ${JSON.stringify(errorData)}`,
+        apiCallMade: true,
       }
     }
 
-    // Handle ongoing conversation with pure OpenAI
-    if (userMessage && messageHistory.length > 0) {
-      console.log(`[ChatActions] Processing OpenAI conversation #${conversationCount + 1}: "${userMessage}"`)
+    const data = await response.json()
+    const aiMessage = data.choices?.[0]?.message?.content || ""
 
-      try {
-        const systemPrompt = `You are a professional ${templateName} having a real conversation with someone who wants to set up an AI agent like you.
+    console.log(`✅ OpenAI API Success! Response: "${aiMessage.substring(0, 100)}..."`)
+    console.log(`💰 Tokens used: ${data.usage?.total_tokens || "unknown"}`)
 
-Be genuinely helpful and respond naturally to what they're saying. If they ask you to decide something for them, actually help them decide based on your expertise. If they ask what you can do, explain and then offer to do something specific.
+    // Extract agent information if we have enough conversation
+    let extractedData = {}
+    let suggestions: string[] = []
 
-This is a REAL conversation - respond authentically to their actual words and questions. Be proactive and helpful.
+    if (conversationCount >= 2) {
+      console.log(`🧠 Extracting agent info from conversation...`)
+      extractedData = await extractAgentInfoFromConversation(messages, userId, openaiKey)
 
-Context: You're helping them configure an AI agent, but focus on having a natural conversation first.`
-
-        // Build conversation history for OpenAI
-        const conversationHistory = messageHistory.map((msg) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        }))
-
-        console.log(`[ChatActions] Sending to OpenAI with ${conversationHistory.length} previous messages`)
-
-        // Use pure OpenAI conversation
-        const response = await LLMService.generateConversation(
-          [{ role: "system", content: systemPrompt }, ...conversationHistory, { role: "user", content: userMessage }],
-          {
-            userId,
-            temperature: 0.9,
-            maxTokens: 300,
-          },
-        )
-
-        if ("error" in response) {
-          console.error(`[ChatActions] OpenAI conversation error: ${response.error}`)
-          return {
-            success: false,
-            error: "OpenAI API error. Please check your API key and try again.",
-          }
-        }
-
-        console.log(`[ChatActions] OpenAI conversation response generated successfully`)
-
-        // Extract agent information using OpenAI
-        const extractedData = await extractAgentInfoWithOpenAI(conversationHistory, userMessage, templateName, userId)
-        const updatedAgentData = { ...currentAgentData, ...extractedData }
-
-        // Show button after 5 exchanges
-        const shouldShowButton = conversationCount >= 4
-
-        return {
-          success: true,
-          message: response.content,
-          agentData: updatedAgentData,
-          setupComplete: shouldShowButton,
-          conversationCount: conversationCount + 1,
-        }
-      } catch (error) {
-        console.error("[ChatActions] Error in OpenAI conversation:", error)
-        return {
-          success: false,
-          error: "Failed to generate response. Please try again.",
-        }
-      }
+      // Generate suggestions based on conversation
+      suggestions = await generateSuggestions(messages, templateName, userId, openaiKey)
     }
+
+    const updatedAgentData = { ...currentAgentData, ...extractedData }
+    const shouldShowButton = conversationCount >= 4
 
     return {
-      success: false,
-      error: "Invalid request parameters",
+      success: true,
+      message: aiMessage,
+      agentData: updatedAgentData,
+      setupComplete: shouldShowButton,
+      conversationCount: isInitial ? 0 : conversationCount + 1,
+      suggestions: suggestions,
+      apiCallMade: true,
     }
   } catch (error) {
-    console.error("Error in generateChatResponse:", error)
+    console.error("💥 Error in generateChatResponse:", error)
     return {
       success: false,
-      error: "Failed to generate response",
+      error: `Failed to generate response: ${error instanceof Error ? error.message : "Unknown error"}`,
+      apiCallMade: false,
     }
   }
 }
 
-async function extractAgentInfoWithOpenAI(
-  conversationHistory: Array<{ role: string; content: string }>,
-  userMessage: string,
-  templateName: string,
+async function extractAgentInfoFromConversation(
+  messages: Array<{ role: string; content: string }>,
   userId: string,
+  openaiKey: string,
 ): Promise<Record<string, any>> {
   try {
-    console.log(`[ExtractInfo] Using OpenAI to extract agent information`)
+    console.log(`🔍 Making REAL API call to extract agent info...`)
 
-    const extractPrompt = `Based on this conversation with a ${templateName}, extract key information about what the user wants their AI agent to help with.
+    const extractPrompt = `Based on this conversation, extract key information about what the user wants their AI agent to help with.
 
 Conversation:
-${conversationHistory
-  .slice(-6)
+${messages
+  .slice(-8)
   .map((msg) => `${msg.role}: ${msg.content}`)
   .join("\n")}
-Latest: user: ${userMessage}
 
-Extract and return ONLY a JSON object with any relevant information:
+Extract and return ONLY a JSON object:
 {
-  "name": "suggested agent name if mentioned",
-  "goal": "what they want to accomplish or their main objective",
-  "behavior": "how they want the agent to behave or work",
-  "notes": "any specific preferences, requirements, or context mentioned"
+  "name": "suggested agent name based on conversation",
+  "goal": "what they want to accomplish",
+  "behavior": "how they want the agent to behave",
+  "focus_area": "main area they want help with",
+  "notes": "key insights from conversation"
 }
 
-Only include fields where information was clearly provided. Return empty object {} if no clear information was shared.`
+Return valid JSON only.`
 
-    const result = await LLMService.generateJSON({
-      prompt: extractPrompt,
-      systemPrompt:
-        "You are an expert at extracting structured information from conversations. Return only valid JSON.",
-      userId,
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "Extract structured information from conversations. Return only valid JSON." },
+          { role: "user", content: extractPrompt },
+        ],
+        max_tokens: 200,
+        temperature: 0.1,
+      }),
     })
 
-    if (result.success && result.data) {
-      console.log(`[ExtractInfo] OpenAI extracted data:`, result.data)
-      return result.data
-    } else {
-      console.log(`[ExtractInfo] OpenAI extraction failed or returned no data`)
+    if (response.ok) {
+      const data = await response.json()
+      const jsonString = data.choices?.[0]?.message?.content || "{}"
+
+      try {
+        const extracted = JSON.parse(jsonString)
+        console.log(`✅ Extracted agent info:`, extracted)
+        return extracted
+      } catch (parseError) {
+        console.log(`⚠️ Failed to parse extracted JSON: ${jsonString}`)
+      }
     }
   } catch (error) {
-    console.error("Error extracting agent info with OpenAI:", error)
+    console.error("Error extracting agent info:", error)
   }
 
   return {}
+}
+
+async function generateSuggestions(
+  messages: Array<{ role: string; content: string }>,
+  templateName: string,
+  userId: string,
+  openaiKey: string,
+): Promise<string[]> {
+  try {
+    console.log(`💡 Making REAL API call to generate suggestions...`)
+
+    const suggestionPrompt = `Based on this conversation with someone setting up a ${templateName} agent, suggest 3 specific, actionable next steps they could take.
+
+Conversation:
+${messages
+  .slice(-6)
+  .map((msg) => `${msg.role}: ${msg.content}`)
+  .join("\n")}
+
+Provide 3 specific suggestions as a JSON array:
+["suggestion 1", "suggestion 2", "suggestion 3"]
+
+Make suggestions practical and based on what they've discussed.`
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "Generate practical suggestions based on conversation context. Return JSON array only.",
+          },
+          { role: "user", content: suggestionPrompt },
+        ],
+        max_tokens: 150,
+        temperature: 0.7,
+      }),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const jsonString = data.choices?.[0]?.message?.content || "[]"
+
+      try {
+        const suggestions = JSON.parse(jsonString)
+        console.log(`✅ Generated suggestions:`, suggestions)
+        return Array.isArray(suggestions) ? suggestions : []
+      } catch (parseError) {
+        console.log(`⚠️ Failed to parse suggestions JSON: ${jsonString}`)
+      }
+    }
+  } catch (error) {
+    console.error("Error generating suggestions:", error)
+  }
+
+  return []
+}
+
+export async function acceptSuggestion(
+  suggestion: string,
+  userId: string,
+  currentAgentData: any,
+): Promise<{ success: boolean; message?: string; agentData?: any }> {
+  try {
+    console.log(`✅ User accepted suggestion: "${suggestion}"`)
+
+    const openaiKey = await getDecryptedApiKey("openai", userId)
+    if (!openaiKey) {
+      return { success: false, message: "OpenAI API key required" }
+    }
+
+    console.log(`🚀 Making REAL API call to process accepted suggestion...`)
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "The user accepted a suggestion. Provide a helpful response and update their agent configuration.",
+          },
+          {
+            role: "user",
+            content: `I accepted this suggestion: "${suggestion}". Please provide next steps and update my agent configuration accordingly.`,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.8,
+      }),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const message = data.choices?.[0]?.message?.content || "Great choice! Let's implement that."
+
+      console.log(`✅ Processed suggestion acceptance`)
+
+      return {
+        success: true,
+        message,
+        agentData: {
+          ...currentAgentData,
+          accepted_suggestions: [...(currentAgentData.accepted_suggestions || []), suggestion],
+          last_suggestion_accepted: suggestion,
+        },
+      }
+    }
+
+    return { success: false, message: "Failed to process suggestion" }
+  } catch (error) {
+    console.error("Error accepting suggestion:", error)
+    return { success: false, message: "Error processing suggestion" }
+  }
 }
 
 export async function completeAgentSetup(request: { agentData: any; userId: string }): Promise<{
@@ -230,25 +359,19 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const { agentData, userId } = request
     const supabase = getSupabaseAdmin()
 
-    console.log(`[CompleteAgentSetup] Creating agent for user ${userId}`)
+    console.log(`🎯 Creating agent with REAL conversation data:`, agentData)
 
     // Validate user exists
     const { data: user, error: userError } = await supabase.from("profiles").select("id").eq("id", userId).single()
 
     if (userError || !user) {
-      console.error("User validation error:", userError)
-      return {
-        success: false,
-        error: "User not found. Please try logging in again.",
-      }
+      return { success: false, error: "User not found. Please try logging in again." }
     }
 
-    // Create agent with extracted data
+    // Create agent with extracted data from REAL conversation
     const agentName = agentData.name || `My ${agentData.templateName}`
     const agentGoal = agentData.goal || `Help with ${agentData.templateName.toLowerCase()} tasks`
     const agentBehavior = agentData.behavior || `Professional ${agentData.templateName} assistant`
-
-    console.log(`[CompleteAgentSetup] Creating agent: ${agentName}`)
 
     const { data: agent, error: agentError } = await supabase
       .from("agents")
@@ -266,58 +389,25 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
 
     if (agentError || !agent) {
       console.error("Error creating agent:", agentError)
-      return {
-        success: false,
-        error: "Failed to create agent. Please try again.",
-      }
+      return { success: false, error: "Failed to create agent. Please try again." }
     }
 
-    console.log(`[CompleteAgentSetup] Agent created with ID: ${agent.id}`)
-
-    // Store additional data
+    // Store conversation data
     try {
       await supabase.from("agent_custom_data").insert({
         agent_id: agent.id,
         owner_id: userId,
         custom_data: {
           ...agentData,
-          template_name: agentData.templateName,
+          created_via: "real_openai_conversation",
+          conversation_insights: agentData.notes,
+          accepted_suggestions: agentData.accepted_suggestions || [],
         },
-        configuration_method: "openai_chat",
+        configuration_method: "real_ai_chat",
         created_at: new Date().toISOString(),
       })
     } catch (customDataError) {
-      console.error("Error storing custom data:", customDataError)
-    }
-
-    // Create initial task
-    try {
-      await supabase.from("tasks").insert({
-        agent_id: agent.id,
-        title: `Welcome to ${agentName}`,
-        description: `Your ${agentData.templateName} is ready to help you achieve: ${agentGoal}`,
-        priority: "medium",
-        status: "todo",
-        created_at: new Date().toISOString(),
-      })
-    } catch (taskError) {
-      console.error("Error creating initial task:", taskError)
-    }
-
-    // Log creation
-    try {
-      await supabase.from("agent_logs").insert({
-        agent_id: agent.id,
-        log_type: "milestone",
-        message: `🎉 Agent "${agentName}" created via OpenAI chat!`,
-        metadata: {
-          template: agentData.templateSlug,
-          created_via: "openai_chat",
-          template_name: agentData.templateName,
-        },
-      })
-    } catch (logError) {
-      console.error("Error creating log:", logError)
+      console.error("Error storing conversation data:", customDataError)
     }
 
     revalidatePath("/dashboard")
@@ -329,9 +419,6 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     }
   } catch (error) {
     console.error("Error in completeAgentSetup:", error)
-    return {
-      success: false,
-      error: "An unexpected error occurred. Please try again.",
-    }
+    return { success: false, error: "An unexpected error occurred. Please try again." }
   }
 }
