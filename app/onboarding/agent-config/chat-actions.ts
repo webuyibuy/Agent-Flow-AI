@@ -68,17 +68,21 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       }
     }
 
-    console.log(`✅ [DEBUG] API key found: ${openaiKey.substring(0, 10)}...`)
+    console.log(`✅ [DEBUG] API key found: ${openaiKey.substring(0, 5)}...`)
     debugInfo.apiKeyFound = true
-    debugInfo.apiKeyPrefix = openaiKey.substring(0, 10)
+    debugInfo.apiKeyPrefix = openaiKey.substring(0, 5)
+    debugInfo.apiKeyLength = openaiKey.length
 
-    // Step 2: Validate API key format
-    if (!openaiKey.startsWith("sk-")) {
-      console.log(`❌ [DEBUG] Invalid API key format`)
+    // Step 2: Validate API key format - REMOVED STRICT VALIDATION
+    // OpenAI keys can have different formats, so we'll be more flexible
+    // We'll just check if it's a reasonable length
+    if (openaiKey.length < 10) {
+      console.log(`⚠️ [DEBUG] API key seems too short (${openaiKey.length} chars)`)
       debugInfo.apiKeyValid = false
+      debugInfo.apiKeyTooShort = true
       return {
         success: false,
-        error: "Invalid OpenAI API key format. Please check your API key.",
+        error: "API key seems too short. Please check your API key in Settings.",
         apiCallMade: false,
         debugInfo,
       }
@@ -121,14 +125,37 @@ Ask relevant questions to understand their needs and provide specific, actionabl
     // Step 4: Make REAL OpenAI API call
     const apiStartTime = Date.now()
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Try different API endpoints if needed
+    const apiEndpoint = "https://api.openai.com/v1/chat/completions"
+    const model = "gpt-3.5-turbo" // Fallback to a more widely available model
+
+    // Try to determine if this is an Azure OpenAI key
+    const isAzureKey = openaiKey.includes("azure") || openaiKey.toLowerCase().startsWith("azure")
+    debugInfo.isAzureKey = isAzureKey
+
+    if (isAzureKey) {
+      console.log(`🔷 [DEBUG] Detected possible Azure OpenAI key`)
+      // We would need Azure endpoint info, but for now just note it
+      debugInfo.needsAzureEndpoint = true
+      return {
+        success: false,
+        error: "Azure OpenAI keys require additional configuration. Please use a direct OpenAI key.",
+        apiCallMade: false,
+        debugInfo,
+      }
+    }
+
+    console.log(`🔑 [DEBUG] Using API endpoint: ${apiEndpoint}`)
+    console.log(`🤖 [DEBUG] Using model: ${model}`)
+
+    const response = await fetch(apiEndpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: model,
         messages: messages,
         max_tokens: 300,
         temperature: 0.8,
@@ -148,11 +175,28 @@ Ask relevant questions to understand their needs and provide specific, actionabl
       console.error(`❌ [DEBUG] OpenAI API Error:`, errorText)
       debugInfo.apiError = errorText
 
-      return {
-        success: false,
-        error: `OpenAI API Error (${response.status}): ${errorText}`,
-        apiCallMade: true,
-        debugInfo,
+      // Check for common error types
+      if (response.status === 401) {
+        return {
+          success: false,
+          error: "Authentication error: Invalid API key. Please check your OpenAI API key.",
+          apiCallMade: true,
+          debugInfo,
+        }
+      } else if (response.status === 429) {
+        return {
+          success: false,
+          error: "Rate limit exceeded: Your OpenAI account has reached its quota or rate limit.",
+          apiCallMade: true,
+          debugInfo,
+        }
+      } else {
+        return {
+          success: false,
+          error: `OpenAI API Error (${response.status}): ${errorText}`,
+          apiCallMade: true,
+          debugInfo,
+        }
       }
     }
 
@@ -241,7 +285,7 @@ Return valid JSON only.`
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "Extract information and return only valid JSON." },
           { role: "user", content: extractPrompt },
@@ -306,7 +350,7 @@ Make suggestions practical and based on what they've discussed.`
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -366,7 +410,7 @@ export async function acceptSuggestion(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",

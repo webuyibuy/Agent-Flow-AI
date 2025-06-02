@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Send, ArrowRight, Sparkles, AlertCircle, Settings, CheckCircle } from "lucide-react"
 import { generateChatResponse, completeAgentSetup } from "@/app/onboarding/agent-config/chat-actions"
 import type { AgentTemplate } from "@/lib/agent-templates"
-import Link from "next/link"
 
 interface Message {
   id: string
@@ -106,9 +105,21 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
 
         setConversationCount(0)
       } else {
-        // NO FALLBACK - Show real error
+        // Show error but add a helpful message about API key
         setError(response.error || "Failed to get AI response")
         console.error("❌ [CLIENT] API call failed:", response.error)
+
+        // Add a helpful message about adding API key
+        if (response.error?.includes("API key")) {
+          setMessages([
+            {
+              id: `error-${Date.now()}`,
+              role: "assistant",
+              content:
+                "To get started, please add your OpenAI API key in Settings → Profile. Click the 'Add API Key' button below to set it up.",
+            },
+          ])
+        }
       }
     } catch (error) {
       console.error("💥 [CLIENT] Error:", error)
@@ -190,7 +201,7 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           setSetupComplete(true)
         }
       } else {
-        // NO FALLBACK - Show real error
+        // Show error
         setError(response.error || "Failed to get AI response")
         console.error("❌ [CLIENT] API call failed:", response.error)
       }
@@ -230,6 +241,10 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
     }
   }
 
+  const handleAddApiKey = () => {
+    router.push("/dashboard/settings/profile")
+  }
+
   return (
     <div className="flex flex-col space-y-6">
       {/* Header */}
@@ -260,9 +275,16 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           <CardContent className="p-3">
             <div className="text-xs space-y-1">
               <div>
-                <strong>Debug:</strong> API Key Found: {debugInfo.apiKeyFound ? "✅" : "❌"} | API Call:{" "}
-                {debugInfo.apiCallSuccessful ? "✅" : "❌"} | Duration: {debugInfo.apiCallDuration}ms
+                <strong>Debug:</strong> API Key Found: {debugInfo.apiKeyFound ? "✅" : "❌"} |
+                {debugInfo.apiKeyValid === false ? " Invalid Format" : ""} |
+                {debugInfo.apiKeyLength ? ` Length: ${debugInfo.apiKeyLength}` : ""}
               </div>
+              {debugInfo.apiCallDuration && (
+                <div>
+                  <strong>API Call:</strong> {debugInfo.apiCallSuccessful ? "✅" : "❌"} | Duration:{" "}
+                  {debugInfo.apiCallDuration}ms
+                </div>
+              )}
               {debugInfo.tokensUsed && (
                 <div>
                   <strong>Tokens:</strong> {debugInfo.tokensUsed}
@@ -285,11 +307,9 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           <AlertDescription className="flex items-center justify-between">
             <span>{error}</span>
             {error.includes("API key") && (
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/dashboard/settings/profile">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Add API Key
-                </Link>
+              <Button variant="outline" size="sm" onClick={handleAddApiKey}>
+                <Settings className="h-4 w-4 mr-2" />
+                Add API Key
               </Button>
             )}
           </AlertDescription>
@@ -373,6 +393,17 @@ export default function AgentChatSetup({ templateSlug, templateName, userId, tem
           </div>
         </div>
       </Card>
+
+      {/* API Key Missing - Add Key Button */}
+      {error?.includes("API key") && (
+        <Button
+          onClick={handleAddApiKey}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 text-lg font-semibold"
+        >
+          <Settings className="mr-2 h-5 w-5" />
+          Add Your OpenAI API Key
+        </Button>
+      )}
 
       {/* Agent Data */}
       {Object.keys(agentData).length > 2 && (
