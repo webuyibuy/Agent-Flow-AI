@@ -8,7 +8,24 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type,
     <input
       type={type}
       className={cn(
-        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        // Base styles - Apple-inspired clean design
+        "flex w-full rounded-xl border bg-white px-4 py-3 text-base",
+        // Border and background
+        "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800",
+        // Text colors
+        "text-gray-900 dark:text-white",
+        // Placeholder
+        "placeholder:text-gray-500 dark:placeholder:text-gray-400",
+        // Focus states - Apple blue
+        "focus:border-blue-500 dark:focus:border-blue-400",
+        "focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20",
+        "focus:outline-none",
+        // Transitions
+        "transition-all duration-200",
+        // Disabled state
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        // File input
+        "file:border-0 file:bg-transparent file:text-sm file:font-medium",
         className,
       )}
       ref={ref}
