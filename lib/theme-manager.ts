@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 
 type Theme = "light" | "dark" | "system"
@@ -25,24 +24,26 @@ export function useTheme() {
 export function ThemeProvider({
   children,
   defaultTheme = "light",
-  storageKey = "agentflow-theme",
 }: {
   children: React.ReactNode
   defaultTheme?: Theme
-  storageKey?: string
 }) {
   const [theme, setThemeState] = useState<Theme>(defaultTheme)
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light")
 
   useEffect(() => {
     // Load theme from localStorage on mount
-    const savedTheme = localStorage.getItem(storageKey) as Theme | null
-    if (savedTheme) {
-      setThemeState(savedTheme)
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("theme") as Theme | null
+      if (savedTheme) {
+        setThemeState(savedTheme)
+      }
     }
-  }, [storageKey])
+  }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
     const root = window.document.documentElement
 
     // Remove previous theme classes
@@ -61,73 +62,22 @@ export function ThemeProvider({
     root.classList.add(resolvedThemeValue)
     setResolvedTheme(resolvedThemeValue)
 
-    // Set CSS custom properties for theme colors
+    // Set basic CSS custom properties
     if (resolvedThemeValue === "light") {
-      root.style.setProperty("--background", "255 255 255") // white
-      root.style.setProperty("--foreground", "28 28 30") // dark text
-      root.style.setProperty("--card", "255 255 255") // white
-      root.style.setProperty("--card-foreground", "28 28 30") // dark text
-      root.style.setProperty("--popover", "255 255 255") // white
-      root.style.setProperty("--popover-foreground", "28 28 30") // dark text
-      root.style.setProperty("--primary", "0 102 204") // blue
-      root.style.setProperty("--primary-foreground", "255 255 255") // white
-      root.style.setProperty("--secondary", "249 249 249") // very light gray
-      root.style.setProperty("--secondary-foreground", "28 28 30") // dark text
-      root.style.setProperty("--muted", "242 242 247") // light gray
-      root.style.setProperty("--muted-foreground", "142 142 147") // medium gray text
-      root.style.setProperty("--accent", "242 242 247") // light gray
-      root.style.setProperty("--accent-foreground", "28 28 30") // dark text
-      root.style.setProperty("--destructive", "220 53 69") // red
-      root.style.setProperty("--destructive-foreground", "255 255 255") // white
-      root.style.setProperty("--border", "229 229 234") // light border
-      root.style.setProperty("--input", "229 229 234") // light border
-      root.style.setProperty("--ring", "0 125 250") // blue focus ring
+      root.style.setProperty("--background", "255 255 255")
+      root.style.setProperty("--foreground", "0 0 0")
     } else {
-      root.style.setProperty("--background", "28 28 30") // dark
-      root.style.setProperty("--foreground", "255 255 255") // white text
-      root.style.setProperty("--card", "44 44 46") // dark card
-      root.style.setProperty("--card-foreground", "255 255 255") // white text
-      root.style.setProperty("--popover", "44 44 46") // dark
-      root.style.setProperty("--popover-foreground", "255 255 255") // white text
-      root.style.setProperty("--primary", "0 145 255") // lighter blue
-      root.style.setProperty("--primary-foreground", "255 255 255") // white
-      root.style.setProperty("--secondary", "58 58 60") // dark gray
-      root.style.setProperty("--secondary-foreground", "255 255 255") // white text
-      root.style.setProperty("--muted", "58 58 60") // dark gray
-      root.style.setProperty("--muted-foreground", "174 174 178") // light gray text
-      root.style.setProperty("--accent", "58 58 60") // dark gray
-      root.style.setProperty("--accent-foreground", "255 255 255") // white text
-      root.style.setProperty("--destructive", "255 69 58") // lighter red
-      root.style.setProperty("--destructive-foreground", "255 255 255") // white
-      root.style.setProperty("--border", "58 58 60") // dark border
-      root.style.setProperty("--input", "58 58 60") // dark border
-      root.style.setProperty("--ring", "90 200 250") // lighter blue focus ring
+      root.style.setProperty("--background", "0 0 0")
+      root.style.setProperty("--foreground", "255 255 255")
     }
   }, [theme])
 
   const setTheme = (newTheme: Theme) => {
-    localStorage.setItem(storageKey, newTheme)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("theme", newTheme)
+    }
     setThemeState(newTheme)
   }
 
   return <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>{children}</ThemeContext.Provider>
-}
-
-// Hook for system theme detection
-export function useSystemTheme() {
-  const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    setSystemTheme(mediaQuery.matches ? "dark" : "light")
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setSystemTheme(e.matches ? "dark" : "light")
-    }
-
-    mediaQuery.addEventListener("change", handleChange)
-    return () => mediaQuery.removeEventListener("change", handleChange)
-  }, [])
-
-  return systemTheme
 }
