@@ -114,10 +114,10 @@ export default function DashboardLayoutClient({
           {/* Template-based creation button - Green */}
           <Button
             size="lg"
-            className="w-full bg-green-600 hover:bg-green-700 text-white border-0 rounded-lg shadow-sm transition-all duration-200"
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 border-0"
             asChild
           >
-            <Link href="/onboarding/templates" className="flex items-center gap-3 py-3">
+            <Link href="/onboarding/templates" className="flex items-center justify-center gap-3 py-3">
               <LayoutTemplateIcon className="h-5 w-5" />
               Use Template
             </Link>
@@ -126,10 +126,10 @@ export default function DashboardLayoutClient({
           {/* Custom agent creation button - Blue */}
           <Button
             size="lg"
-            className="w-full bg-[#0071e3] hover:bg-[#005bbf] text-white border-0 rounded-lg shadow-sm transition-all duration-200"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 border-0"
             asChild
           >
-            <Link href="/dashboard/agents/new" className="flex items-center gap-3 py-3">
+            <Link href="/dashboard/agents/new" className="flex items-center justify-center gap-3 py-3">
               <PlusCircleIcon className="h-5 w-5" />
               New Agent
             </Link>
