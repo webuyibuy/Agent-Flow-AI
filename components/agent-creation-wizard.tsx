@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useActionState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -138,8 +138,8 @@ export default function AgentCreationWizard({ userId }: AgentCreationWizardProps
     behavior: "",
     priority: "medium" as "low" | "medium" | "high",
   })
-
-  const [createState, createAction, isCreating] = useActionState(createAgentWithWorkflow, undefined)
+  const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const totalSteps = 4
   const progress = (currentStep / totalSteps) * 100
@@ -165,37 +165,6 @@ export default function AgentCreationWizard({ userId }: AgentCreationWizardProps
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1)
     }
-  }
-
-  const handleCreate = () => {
-    if (!selectedTemplate || !agentData.name || !agentData.goal) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields before creating the agent.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const formData = new FormData()
-    formData.append("templateId", selectedTemplate.id)
-    formData.append("name", agentData.name)
-    formData.append("goal", agentData.goal)
-    formData.append("behavior", agentData.behavior)
-    formData.append("priority", agentData.priority)
-    formData.append("suggestedTasks", JSON.stringify(selectedTemplate.suggestedTasks))
-
-    createAction(formData)
-  }
-
-  // Handle successful creation
-  if (createState?.success && createState?.agentId) {
-    toast({
-      title: "Agent Created Successfully!",
-      description: "Your agent is now active and ready to start working.",
-    })
-    router.push(`/dashboard/agents/${createState.agentId}?created=true`)
-    return null
   }
 
   const renderStepContent = () => {
@@ -394,6 +363,57 @@ export default function AgentCreationWizard({ userId }: AgentCreationWizardProps
     }
   }
 
+  // Fix: Use a form with action prop instead of direct function call
+  const handleSubmit = async (formData: FormData) => {
+    if (!selectedTemplate || !agentData.name || !agentData.goal) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields before creating the agent.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsCreating(true)
+    setError(null)
+
+    try {
+      // Add all the necessary data to the form
+      formData.append("templateId", selectedTemplate.id)
+      formData.append("name", agentData.name)
+      formData.append("goal", agentData.goal)
+      formData.append("behavior", agentData.behavior)
+      formData.append("priority", agentData.priority)
+      formData.append("suggestedTasks", JSON.stringify(selectedTemplate.suggestedTasks))
+
+      const result = await createAgentWithWorkflow(undefined, formData)
+
+      if (result.error) {
+        setError(result.error)
+        toast({
+          title: "Creation Failed",
+          description: result.error,
+          variant: "destructive",
+        })
+      } else if (result.success && result.agentId) {
+        toast({
+          title: "Agent Created Successfully!",
+          description: "Your agent is now active and ready to start working.",
+        })
+        router.push(`/dashboard/agents/${result.agentId}?created=true`)
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.")
+      toast({
+        title: "Creation Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Progress Bar */}
@@ -408,11 +428,11 @@ export default function AgentCreationWizard({ userId }: AgentCreationWizardProps
       </div>
 
       {/* Error Display */}
-      {createState?.error && (
+      {error && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Creation Failed</AlertTitle>
-          <AlertDescription>{createState.error}</AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
@@ -439,23 +459,25 @@ export default function AgentCreationWizard({ userId }: AgentCreationWizardProps
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           ) : (
-            <Button
-              onClick={handleCreate}
-              disabled={isCreating || !agentData.name || !agentData.goal}
-              className="bg-[#007AFF] hover:bg-[#0056b3]"
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Agent...
-                </>
-              ) : (
-                <>
-                  <Zap className="h-4 w-4 mr-2" />
-                  Create & Launch Agent
-                </>
-              )}
-            </Button>
+            <form action={handleSubmit}>
+              <Button
+                type="submit"
+                disabled={isCreating || !agentData.name || !agentData.goal || !selectedTemplate}
+                className="bg-[#007AFF] hover:bg-[#0056b3]"
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating Agent...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Create & Launch Agent
+                  </>
+                )}
+              </Button>
+            </form>
           )}
         </div>
       </div>
