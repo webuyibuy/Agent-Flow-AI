@@ -33,7 +33,7 @@
     --success-bg: 240 253 244;
     --success-text: 22 101 52;
 
-    /* Warning colors - Apple orange */
+    /* Warning colors - Apple orange (not yellow) */
     --warning: 255 149 0;
     --warning-foreground: 255 255 255;
     --warning-bg: 255 251 235;
@@ -144,108 +144,86 @@
   }
 }
 
-@layer components {
-  /* Apple-inspired component styles */
-  .apple-card {
-    @apply bg-white border border-gray-200 rounded-xl shadow-sm;
-  }
-
-  .dark .apple-card {
-    @apply bg-gray-900 border-gray-800;
-  }
-
-  .apple-button-primary {
-    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-2 transition-colors;
-  }
-
-  .apple-button-secondary {
-    @apply bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-lg px-4 py-2 transition-colors;
-  }
-
-  .dark .apple-button-secondary {
-    @apply bg-gray-800 hover:bg-gray-700 text-white;
-  }
-
-  .apple-input {
-    @apply bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors;
-  }
-
-  .dark .apple-input {
-    @apply bg-gray-900 border-gray-700 text-white placeholder-gray-400 focus:border-blue-400 focus:ring-blue-400;
-  }
-
-  /* Remove any yellow backgrounds */
-  .no-yellow {
-    background-color: transparent !important;
-  }
-
-  /* Apple-style glass effect */
-  .apple-glass {
-    @apply bg-white/80 backdrop-blur-xl border border-gray-200/50;
-  }
-
-  .dark .apple-glass {
-    @apply bg-gray-900/80 border-gray-700/50;
-  }
-}
-
 @layer utilities {
-  /* Apple-inspired utilities */
-  .text-apple-primary {
-    @apply text-gray-900;
+  /* Completely remove yellow backgrounds */
+  .bg-yellow-50,
+  .bg-yellow-100,
+  .bg-yellow-200,
+  .bg-yellow-300,
+  .bg-yellow-400,
+  .bg-yellow-500,
+  .bg-yellow-600,
+  .bg-yellow-700,
+  .bg-yellow-800,
+  .bg-yellow-900 {
+    background-color: white !important;
   }
 
-  .text-apple-secondary {
-    @apply text-gray-600;
+  .dark .bg-yellow-50,
+  .dark .bg-yellow-100,
+  .dark .bg-yellow-200,
+  .dark .bg-yellow-300,
+  .dark .bg-yellow-400,
+  .dark .bg-yellow-500,
+  .dark .bg-yellow-600,
+  .dark .bg-yellow-700,
+  .dark .bg-yellow-800,
+  .dark .bg-yellow-900 {
+    background-color: #1c1c1e !important;
   }
 
-  .text-apple-tertiary {
-    @apply text-gray-500;
+  /* Remove yellow text colors */
+  .text-yellow-50,
+  .text-yellow-100,
+  .text-yellow-200,
+  .text-yellow-300,
+  .text-yellow-400,
+  .text-yellow-500,
+  .text-yellow-600,
+  .text-yellow-700,
+  .text-yellow-800,
+  .text-yellow-900 {
+    color: #1c1c1e !important;
   }
 
-  .dark .text-apple-primary {
-    @apply text-white;
+  .dark .text-yellow-50,
+  .dark .text-yellow-100,
+  .dark .text-yellow-200,
+  .dark .text-yellow-300,
+  .dark .text-yellow-400,
+  .dark .text-yellow-500,
+  .dark .text-yellow-600,
+  .dark .text-yellow-700,
+  .dark .text-yellow-800,
+  .dark .text-yellow-900 {
+    color: white !important;
   }
 
-  .dark .text-apple-secondary {
-    @apply text-gray-300;
+  /* Remove yellow borders */
+  .border-yellow-50,
+  .border-yellow-100,
+  .border-yellow-200,
+  .border-yellow-300,
+  .border-yellow-400,
+  .border-yellow-500,
+  .border-yellow-600,
+  .border-yellow-700,
+  .border-yellow-800,
+  .border-yellow-900 {
+    border-color: #e5e5ea !important;
   }
 
-  .dark .text-apple-tertiary {
-    @apply text-gray-400;
-  }
-
-  .bg-apple-primary {
-    @apply bg-white;
-  }
-
-  .bg-apple-secondary {
-    @apply bg-gray-50;
-  }
-
-  .bg-apple-tertiary {
-    @apply bg-gray-100;
-  }
-
-  .dark .bg-apple-primary {
-    @apply bg-black;
-  }
-
-  .dark .bg-apple-secondary {
-    @apply bg-gray-900;
-  }
-
-  .dark .bg-apple-tertiary {
-    @apply bg-gray-800;
-  }
-
-  /* Animation utilities */
-  .animate-apple-fade-in {
-    animation: appleFadeIn 0.3s ease-out;
-  }
-
-  .animate-apple-slide-up {
-    animation: appleSlideUp 0.4s ease-out;
+  .dark .border-yellow-50,
+  .dark .border-yellow-100,
+  .dark .border-yellow-200,
+  .dark .border-yellow-300,
+  .dark .border-yellow-400,
+  .dark .border-yellow-500,
+  .dark .border-yellow-600,
+  .dark .border-yellow-700,
+  .dark .border-yellow-800,
+  .dark .border-yellow-900 {
+    border-color: #3a3a3c !important;
   }
 }
 
@@ -270,34 +248,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Fix for yellow backgrounds - using proper Tailwind syntax */
-.bg-yellow-50,
-.bg-yellow-100,
-.bg-yellow-200,
-.bg-yellow-300,
-.bg-yellow-400,
-.bg-yellow-500 {
-  background-color: white !important;
-}
-
-.dark .bg-yellow-50,
-.dark .bg-yellow-100,
-.dark .bg-yellow-200,
-.dark .bg-yellow-300,
-.dark .bg-yellow-400,
-.dark .bg-yellow-500 {
-  background-color: #1c1c1e !important;
-}
-
-/* Ensure clean backgrounds */
-.dashboard-layout {
-  @apply bg-white;
-}
-
-.dark .dashboard-layout {
-  @apply bg-black;
 }
 
 /* Print styles */

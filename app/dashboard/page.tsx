@@ -248,51 +248,51 @@ export default function DashboardPage({
       {/* Header */}
       <div className="space-y-6 sm:space-y-8">
         <div className="px-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Your AI Workspace</h1>
-          <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Your AI Workspace</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
             Manage your agents and complete tasks they need help with
           </p>
         </div>
       </div>
 
-      {/* User Tasks Section */}
-      <Card>
+      {/* User Tasks Section - Clean Apple Design */}
+      <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <CheckCircleIcon className="h-5 w-5 text-blue-600" />
+              <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <CardTitle>Tasks for You ({activeTasks.length})</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-white">Tasks for You ({activeTasks.length})</CardTitle>
             </div>
             <Link
               href="/dashboard/dependencies"
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
             >
               <Clock className="h-4 w-4" />
               View All Dependencies
             </Link>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-white dark:bg-gray-900">
           {activeTasks.length === 0 ? (
             <div className="text-center py-12">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks for you right now</h3>
-              <p className="text-gray-600 mb-6">
+              <FileText className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No tasks for you right now</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Your agents are working autonomously. When they need your help, tasks will appear here.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Link
                   href="/dashboard/dependencies"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Clock className="h-4 w-4" />
                   Check Dependencies
                 </Link>
                 <Link
                   href="/dashboard/agents/new"
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   <PlusCircle className="h-4 w-4" />
                   Create Another Agent
@@ -304,7 +304,7 @@ export default function DashboardPage({
               {activeTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="border border-blue-200 bg-blue-50 rounded-lg p-3 sm:p-4 hover:bg-blue-100 transition-colors"
+                  className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <form action={completeTaskFormAction} className="mt-1">
@@ -325,15 +325,18 @@ export default function DashboardPage({
                     </form>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-semibold text-gray-900">{task.title}</h4>
+                        <h4 className="font-semibold text-gray-900 dark:text-white">{task.title}</h4>
                         {isCompletingTask && completionState?.taskId === task.id && (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                          <Badge
+                            variant="outline"
+                            className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                          >
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                             Completing...
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
                         <span className="flex items-center gap-1">
                           <Bot className="h-3 w-3" />
                           {task.agents?.name}
@@ -344,17 +347,21 @@ export default function DashboardPage({
                         </span>
                       </div>
                       {task.metadata?.user_notes && (
-                        <p className="text-sm text-gray-700 bg-white/60 p-2 rounded">{task.metadata.user_notes}</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60 p-2 rounded">
+                          {task.metadata.user_notes}
+                        </p>
                       )}
                     </div>
                   </div>
                 </div>
               ))}
               <div className="text-center pt-4">
-                <p className="text-sm text-gray-500 mb-2">✅ Check the box when you complete a task</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  ✅ Check the box when you complete a task
+                </p>
                 <Link
                   href="/dashboard/dependencies"
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                  className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   <ArrowRight className="h-4 w-4" />
                   View all dependencies
@@ -367,10 +374,10 @@ export default function DashboardPage({
 
       {/* Agents Overview */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-gray-900">Your Agents ({agents.length})</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Agents ({agents.length})</h2>
         <Link
           href="/dashboard/agents/new"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
         >
           <PlusCircle className="h-4 w-4" />
           Create Agent
@@ -378,17 +385,17 @@ export default function DashboardPage({
       </div>
 
       {agents.length === 0 ? (
-        <Card className="border-2 border-dashed border-gray-300">
+        <Card className="border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
           <CardContent className="py-16 text-center">
-            <Zap className="h-16 w-16 text-gray-400 mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">Create Your First AI Agent</h3>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+            <Zap className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Create Your First AI Agent</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
               Tell your agent what you want to achieve, and it will start working immediately while showing you its
               thinking process.
             </p>
             <Link
               href="/dashboard/agents/new"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-colors"
             >
               <PlusCircle className="h-5 w-5" />
               Create Your First Agent
@@ -399,12 +406,15 @@ export default function DashboardPage({
       ) : (
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((agent) => (
-            <Card key={agent.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={agent.id}
+              className="hover:shadow-md transition-shadow bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-lg">{agent.name}</CardTitle>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{agent.goal}</p>
+                    <CardTitle className="text-lg text-gray-900 dark:text-white">{agent.name}</CardTitle>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{agent.goal}</p>
                   </div>
                   <Badge variant={agent.status === "active" ? "default" : "secondary"}>{agent.status}</Badge>
                 </div>
@@ -412,7 +422,7 @@ export default function DashboardPage({
               <CardContent>
                 <Link
                   href={`/dashboard/agents/${agent.id}`}
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                  className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   View Details <ArrowRight className="h-4 w-4" />
                 </Link>
