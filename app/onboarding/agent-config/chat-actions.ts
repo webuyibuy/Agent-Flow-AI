@@ -2,6 +2,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { AIOperations } from "@/lib/ai-operations"
+import { LLMService } from "@/lib/llm-service"
 
 interface ChatRequest {
   templateSlug: string
@@ -33,13 +35,49 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       currentAgentData = {},
     } = request
 
-    // Generate initial greeting
+    console.log(`[ChatActions] Processing request for ${templateName}, isInitial: ${isInitial}`)
+
+    // Generate initial greeting using LLM
     if (isInitial) {
-      const greeting = getDefaultGreeting(templateName)
-      return {
-        success: true,
-        message: greeting,
-        agentData: { templateSlug, templateName },
+      try {
+        const initialPrompt = `
+You are a friendly ${templateName} assistant helping a user set up their agent.
+
+Start with a warm, brief greeting (1-2 sentences) introducing yourself as their ${templateName}.
+Then ask ONE simple question about what they want to accomplish with this agent.
+
+Keep your response very concise and conversational. Just one question at a time.
+Make sure your greeting reflects your role as a ${templateName}.
+`
+
+        const response = await LLMService.generateText(initialPrompt, {
+          systemPrompt: `You are a helpful ${templateName} assistant. Be friendly, concise, and professional.`,
+          userId,
+          temperature: 0.7,
+        })
+
+        if ("error" in response) {
+          console.log(`[ChatActions] LLM error, using fallback greeting: ${response.error}`)
+          return {
+            success: true,
+            message: getDefaultGreeting(templateName),
+            agentData: { templateSlug, templateName },
+          }
+        }
+
+        console.log(`[ChatActions] Generated greeting using LLM`)
+        return {
+          success: true,
+          message: response.content,
+          agentData: { templateSlug, templateName },
+        }
+      } catch (error) {
+        console.error("[ChatActions] Error generating initial greeting:", error)
+        return {
+          success: true,
+          message: getDefaultGreeting(templateName),
+          agentData: { templateSlug, templateName },
+        }
       }
     }
 
@@ -51,28 +89,59 @@ export async function generateChatResponse(request: ChatRequest): Promise<ChatRe
       // Check if we have all required information
       const setupComplete = isSetupComplete(currentAgentData, neededInfo)
 
-      // Extract information from the user's message
-      const extractedData = extractInfoFromMessage(
-        userMessage,
-        messageHistory[messageHistory.length - 2]?.content || "",
-        currentAgentData,
-      )
+      try {
+        // Extract information from the user's message using LLM
+        const extractedData = await extractInfoFromMessageAI(
+          userMessage,
+          messageHistory[messageHistory.length - 2]?.content || "",
+          currentAgentData,
+          userId,
+        )
 
-      const updatedAgentData = { ...currentAgentData, ...extractedData }
+        const updatedAgentData = { ...currentAgentData, ...extractedData }
 
-      // Generate next question or completion message
-      let nextMessage = ""
-      if (setupComplete) {
-        nextMessage = "Perfect! I have all the information I need. Ready to create your agent?"
-      } else {
-        nextMessage = getNextQuestion(neededInfo[0], templateName)
-      }
+        // Generate next response using LLM
+        const nextPrompt = createNextPrompt(templateName, userMessage, neededInfo, setupComplete, updatedAgentData)
 
-      return {
-        success: true,
-        message: nextMessage,
-        agentData: updatedAgentData,
-        setupComplete,
+        const conversationHistory = messageHistory.map((msg) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        }))
+
+        // Use AIOperations for a more contextual response
+        const aiResponse = await AIOperations.generateConversationResponse(
+          nextPrompt,
+          conversationHistory,
+          {
+            userName: "User",
+            agentRole: templateName,
+            templateSlug: templateSlug,
+          },
+          userId,
+        )
+
+        console.log(`[ChatActions] Generated response using LLM, setupComplete: ${setupComplete}`)
+
+        return {
+          success: true,
+          message: aiResponse || getNextQuestion(neededInfo[0], templateName),
+          agentData: updatedAgentData,
+          setupComplete,
+        }
+      } catch (error) {
+        console.error("[ChatActions] Error in AI conversation:", error)
+
+        // Fallback to simple response
+        const nextMessage = setupComplete
+          ? "Perfect! I have all the information I need. Ready to create your agent?"
+          : getNextQuestion(neededInfo[0], templateName)
+
+        return {
+          success: true,
+          message: nextMessage,
+          agentData: currentAgentData,
+          setupComplete,
+        }
       }
     }
 
@@ -157,8 +226,8 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       // Continue anyway, not critical
     }
 
-    // Create initial tasks
-    await createInitialTasks(agent.id, agentData, userId)
+    // Create initial tasks using AI
+    await createInitialTasksWithAI(agent.id, agentData, userId)
 
     // Log creation
     await supabase.from("agent_logs").insert({
@@ -206,14 +275,58 @@ function isSetupComplete(currentData: Record<string, any>, neededInfo: string[])
   return currentData.goal && currentData.name && neededInfo.length <= 1
 }
 
-function extractInfoFromMessage(
+// AI-powered information extraction
+async function extractInfoFromMessageAI(
+  userMessage: string,
+  previousQuestion: string,
+  currentData: Record<string, any>,
+  userId: string,
+): Promise<Record<string, any>> {
+  try {
+    const extractionPrompt = `
+Extract key information from this user message. The previous assistant question was: "${previousQuestion}"
+
+User message: "${userMessage}"
+
+Based on the context, extract the most likely piece of information this is providing.
+Return a JSON object with ONLY ONE of these fields (the most relevant one):
+{
+  "name": "extracted agent name",
+  "goal": "extracted agent goal",
+  "behavior": "extracted agent behavior"
+}
+
+Only include the field that is most relevant to what was asked. Return ONLY valid JSON.
+`
+
+    const systemPrompt = `You are a data extraction assistant. Extract only the most relevant information from the user message based on the previous question context. Return only valid JSON with a single field.`
+
+    const result = await LLMService.generateJSON({
+      prompt: extractionPrompt,
+      systemPrompt,
+      userId,
+    })
+
+    if (!result.success || !result.data) {
+      console.log("[ExtractInfo] LLM extraction failed, falling back to simple extraction")
+      return simpleExtractInfo(userMessage, previousQuestion, currentData)
+    }
+
+    console.log("[ExtractInfo] LLM extraction result:", result.data)
+    return result.data
+  } catch (error) {
+    console.error("[ExtractInfo] Error extracting with AI:", error)
+    return simpleExtractInfo(userMessage, previousQuestion, currentData)
+  }
+}
+
+// Simple fallback extraction
+function simpleExtractInfo(
   userMessage: string,
   previousQuestion: string,
   currentData: Record<string, any>,
 ): Record<string, any> {
   const result: Record<string, any> = {}
-
-  // Simple keyword-based extraction
   const lowerMessage = userMessage.toLowerCase()
   const lowerPrevious = previousQuestion.toLowerCase()
 
@@ -244,6 +357,55 @@ function extractInfoFromMessage(
   }
 
   return result
+}
+
+// Create prompt for next question
+function createNextPrompt(
+  templateName: string,
+  userMessage: string,
+  neededInfo: string[],
+  setupComplete: boolean,
+  agentData: Record<string, any>,
+): string {
+  if (setupComplete) {
+    return `
+Thank the user for providing all the information you need. Let them know you're ready to create their ${templateName} agent.
+Keep your response very brief and friendly.
+`
+  }
+
+  const nextNeeded = neededInfo[0] || "additional_details"
+  const contextInfo = `
+Current information:
+${agentData.goal ? `- Goal: ${agentData.goal}` : ""}
+${agentData.name ? `- Name: ${agentData.name}` : ""}
+${agentData.behavior ? `- Behavior: ${agentData.behavior}` : ""}
+`
+
+  const prompts: Record<string, string> = {
+    name: `
+Based on our conversation so far, ask the user what they would like to name their ${templateName} agent.
+Keep your question very brief and conversational. Just one question.
+${contextInfo}
+`,
+    goal: `
+Based on our conversation so far, ask the user what their main goal or objective is for this ${templateName} agent.
+Keep your question very brief and conversational. Just one question.
+${contextInfo}
+`,
+    behavior: `
+Based on our conversation so far, ask the user how they would like their ${templateName} agent to behave or operate.
+Keep your question very brief and conversational. Just one question.
+${contextInfo}
+`,
+    additional_details: `
+Based on our conversation so far, ask the user if there's anything else they'd like to add about their ${templateName} agent.
+Keep your question very brief and conversational. Just one question.
+${contextInfo}
+`,
+  }
+
+  return prompts[nextNeeded]
 }
 
 function getNextQuestion(neededInfo: string, templateName: string): string {
@@ -277,11 +439,62 @@ function getDefaultGreeting(templateName: string): string {
   )
 }
 
-async function createInitialTasks(agentId: string, agentData: any, userId: string): Promise<void> {
+// Create initial tasks using AI
+async function createInitialTasksWithAI(agentId: string, agentData: any, userId: string): Promise<void> {
   try {
     const supabase = getSupabaseAdmin()
 
-    // Create a simple initial task based on the agent's goal
+    try {
+      // Generate tasks using AI
+      const taskPrompt = `
+Create 3-5 initial tasks for a ${agentData.templateName} agent with the goal: "${agentData.goal}"
+
+Return a JSON array of task objects with this structure:
+[
+  {
+    "title": "Task title",
+    "description": "Detailed task description",
+    "priority": "high|medium|low",
+    "status": "todo",
+    "category": "setup|research|implementation|review"
+  }
+]
+
+Tasks should be practical, specific, and help achieve the agent's goal.
+`
+
+      const systemPrompt = `You are a task planning assistant for a ${agentData.templateName}. Create practical, actionable tasks that will help achieve the agent's goal. Return only valid JSON.`
+
+      const result = await LLMService.generateJSON({
+        prompt: taskPrompt,
+        systemPrompt,
+        userId,
+      })
+
+      if (result.success && result.data && Array.isArray(result.data)) {
+        console.log(`[CreateInitialTasks] Generated ${result.data.length} tasks with AI`)
+
+        // Insert the generated tasks
+        for (const task of result.data) {
+          await supabase.from("tasks").insert({
+            agent_id: agentId,
+            title: task.title,
+            description: task.description,
+            priority: task.priority || "medium",
+            status: task.status || "todo",
+            category: task.category || "setup",
+            created_at: new Date().toISOString(),
+          })
+        }
+
+        return
+      }
+    } catch (error) {
+      console.error("[CreateInitialTasks] Error generating tasks with AI:", error)
+    }
+
+    // Fallback: Create a simple initial task
+    console.log("[CreateInitialTasks] Using fallback task creation")
     const taskTitle = `Initial setup for ${agentData.name}`
     const taskDescription = `Configure and prepare the agent to achieve: ${agentData.goal}`
 
@@ -290,11 +503,9 @@ async function createInitialTasks(agentId: string, agentData: any, userId: strin
       title: taskTitle,
       description: taskDescription,
       priority: "high",
-      status: "pending",
+      status: "todo",
       created_at: new Date().toISOString(),
     })
-
-    console.log(`[CreateInitialTasks] Created initial task for agent ${agentId}`)
   } catch (error) {
     console.error("Error creating initial tasks:", error)
   }
