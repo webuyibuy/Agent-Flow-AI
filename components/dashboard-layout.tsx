@@ -110,9 +110,9 @@ export default function DashboardLayoutClient({
           ))}
         </nav>
 
-        <div className="mt-auto p-4 space-y-3 flex flex-col items-center">
+        <div className="mt-auto p-4 space-y-3 flex flex-col items-center bg-[#0071e3] rounded-xl mx-4 mb-4">
           {/* Template-based creation button */}
-          <Button variant="outline" size="lg" className="w-full" asChild>
+          <Button variant="ghost" size="lg" className="w-full text-white hover:bg-white/10 border-white/20" asChild>
             <Link href="/onboarding/templates" className="flex items-center gap-2">
               <LayoutTemplateIcon className="h-5 w-5" />
               Use Template
@@ -120,7 +120,7 @@ export default function DashboardLayoutClient({
           </Button>
 
           {/* Regular agent creation button */}
-          <Button variant="filled" size="lg" className="w-full" asChild>
+          <Button variant="ghost" size="lg" className="w-full text-white hover:bg-white/10" asChild>
             <Link href="/dashboard/agents/new" className="flex items-center gap-2">
               <PlusCircleIcon className="h-5 w-5" />
               New Agent
