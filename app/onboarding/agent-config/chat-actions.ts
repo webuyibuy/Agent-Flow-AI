@@ -393,7 +393,38 @@ async function ensureUserProfileExists(
     // Always use the default user to avoid foreign key issues
     const targetUserId = DEFAULT_USER_ID
 
-    // Check if default user exists
+    // First, explicitly create/update the default user profile to ensure it exists
+    const { error: insertError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: targetUserId,
+        display_name: DEFAULT_USER_DISPLAY_NAME,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+
+    if (insertError) {
+      console.error(`❌ [DEBUG] Error creating default profile:`, insertError)
+
+      // Try a direct insert as fallback
+      const { error: directInsertError } = await supabase.from("profiles").insert({
+        id: targetUserId,
+        display_name: DEFAULT_USER_DISPLAY_NAME,
+        updated_at: new Date().toISOString(),
+      })
+
+      if (directInsertError && directInsertError.code !== "23505") {
+        // Ignore duplicate key errors
+        console.error(`❌ [DEBUG] Error with direct insert:`, directInsertError)
+        return {
+          success: false,
+          validUserId: targetUserId,
+          error: `Failed to create profile: ${directInsertError.message}`,
+        }
+      }
+    }
+
+    // Verify the profile exists after our creation attempt
     const { data: existingProfile, error: checkError } = await supabase
       .from("profiles")
       .select("id, display_name")
@@ -405,31 +436,20 @@ async function ensureUserProfileExists(
       return { success: true, validUserId: targetUserId }
     }
 
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error(`❌ [DEBUG] Error checking profile:`, checkError)
-      return { success: false, validUserId: targetUserId, error: `Error checking profile: ${checkError.message}` }
+    if (checkError) {
+      console.error(`❌ [DEBUG] Error verifying profile:`, checkError)
+      return {
+        success: false,
+        validUserId: targetUserId,
+        error: `Error verifying profile: ${checkError.message}`,
+      }
     }
 
-    // Create default user if it doesn't exist
-    console.log(`🔨 [DEBUG] Creating default user: ${targetUserId}`)
-
-    const { data: newProfile, error: createError } = await supabase
-      .from("profiles")
-      .insert({
-        id: targetUserId,
-        display_name: DEFAULT_USER_DISPLAY_NAME,
-        updated_at: new Date().toISOString(),
-      })
-      .select("id, display_name")
-      .single()
-
-    if (createError) {
-      console.error(`❌ [DEBUG] Error creating profile:`, createError)
-      return { success: false, validUserId: targetUserId, error: `Error creating profile: ${createError.message}` }
+    return {
+      success: false,
+      validUserId: targetUserId,
+      error: "Failed to create or verify user profile",
     }
-
-    console.log(`✅ [DEBUG] Created default user: ${newProfile.display_name}`)
-    return { success: true, validUserId: targetUserId }
   } catch (error) {
     console.error(`💥 [DEBUG] Unexpected error in ensureUserProfileExists:`, error)
     return {
@@ -466,6 +486,31 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
     const validUserId = userResult.validUserId
     console.log(`✅ [DEBUG] Using valid user ID: ${validUserId}`)
 
+    // Double-check that the profile exists before proceeding
+    const { data: profileCheck, error: profileCheckError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", validUserId)
+      .single()
+
+    if (profileCheckError || !profileCheck) {
+      console.error(`❌ [DEBUG] Profile verification failed:`, profileCheckError || "No profile found")
+
+      // Last resort: Try direct SQL insertion
+      try {
+        const { error: sqlError } = await supabase.rpc("ensure_default_profile")
+        if (sqlError) {
+          console.error(`❌ [DEBUG] SQL profile creation failed:`, sqlError)
+          return {
+            success: false,
+            error: "Failed to create user profile. Please try again later.",
+          }
+        }
+      } catch (sqlExecError) {
+        console.error(`❌ [DEBUG] SQL execution error:`, sqlExecError)
+      }
+    }
+
     // Step 2: Create agent with extracted data
     const agentName = agentData.name || `My ${agentData.templateName || "Agent"}`
     const agentGoal = agentData.goal || `Help with ${(agentData.templateName || "general").toLowerCase()} tasks`
@@ -499,10 +544,10 @@ export async function completeAgentSetup(request: { agentData: any; userId: stri
       console.error(`❌ [DEBUG] Full error details:`, JSON.stringify(agentError, null, 2))
 
       // Provide more specific error messages
-      if (agentError.message?.includes("column") && agentError.message?.includes("does not exist")) {
+      if (agentError.message?.includes("foreign key constraint")) {
         return {
           success: false,
-          error: "Database schema error. Please contact support.",
+          error: "Database relationship error. Please try again or contact support.",
         }
       }
 
