@@ -1,4 +1,5 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ConnectionManager } from "./connection-manager"
@@ -42,43 +43,8 @@ export async function getSupabaseServerWithCookies() {
   }
 
   try {
-    const config = connectionManager.getConfig()
-
-    // Dynamically import cookies only when needed
-    const { cookies } = await import("next/headers")
-    const cookieStore = cookies()
-
-    const client = createServerClient(config.url, config.anonKey, {
-      cookies: {
-        get(name: string) {
-          try {
-            return cookieStore.get(name)?.value
-          } catch (error) {
-            console.warn("Could not get cookie:", name, error)
-            return undefined
-          }
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            console.warn("Could not set cookie:", name, error)
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: "", ...options })
-          } catch (error) {
-            console.warn("Could not remove cookie:", name, error)
-          }
-        },
-      },
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    })
+    // Use createServerComponentClient instead
+    const client = createServerComponentClient({ cookies })
 
     console.log("✅ Real Supabase server client with cookies initialized")
     return client

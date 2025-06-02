@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ConnectionManager } from "./connection-manager"
 
@@ -19,14 +19,10 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   }
 
   try {
-    const config = connectionManager.getConfig()
-
-    supabaseClient = createBrowserClient(config.url, config.anonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
+    // Use createClientComponentClient instead of createBrowserClient
+    supabaseClient = createClientComponentClient({
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     })
 
     console.log("✅ Real Supabase browser client initialized")
